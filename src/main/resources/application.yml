@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: taskboard
+  profiles:
+    active: dev
+  jpa:
+    open-in-view: false
+ai:
+  mock: true
+  model: "TODO-2日目に確認して記入"
+  api-key: ${GEMINI_API_KEY:}
+  timeout-seconds: 10
+  max-attempts: 3
+mail: 
+  mock: true
+
+app:
+  base-url: http://localhost:8080
