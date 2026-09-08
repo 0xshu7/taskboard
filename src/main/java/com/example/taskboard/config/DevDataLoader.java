@@ -5,19 +5,21 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
+import com.example.taskboard.domain.User;
 import com.example.taskboard.repository.UserRepository;
 
 @Configuration
 @Profile("dev")
 public class DevDataLoader {
-	
-	
+
 	@Bean
 	CommandLineRunner loadDevData(UserRepository users) {
 		return args -> {
-			if (users.findByEmail("dev@"))
-		}
+			if (users.findByEmail("dev@example.com").isEmpty()) {
+				users.save(new User("dev@example.com", "開発ユーザー"));
+			}
+			System.out.println("users count = " + users.count());
+		};
 	}
-
 
 }

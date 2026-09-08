@@ -9,3 +9,6 @@ spring:
       ddl-auto: update   # 設計が固まったら validate に変える
     show-sql: false
 
+  h2:
+    console:
+      enabled: false
