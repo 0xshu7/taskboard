@@ -1,0 +1,93 @@
+package com.example.taskboard.controller;
+
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import com.example.taskboard.domain.Difficulty;
+import com.example.taskboard.service.TaskService;
+
+// 画面を返すクラス。@Controller は「HTMLを返す」という意味
+// （@RestController だと文字やJSONをそのまま返してしまう）
+@Controller
+public class TaskController {
+
+	// Service を保持する。final なので後から差し替えられない
+	private final TaskService taskService;
+
+	// コンストラクタが1つだけなら、Spring が自動で TaskService を渡してくれる
+	public TaskController(TaskService taskService) {
+		this.taskService = taskService;
+	}
+
+	// トップページ。一覧を作って画面に渡す
+	@GetMapping("/")
+	public String index(Model model) {
+
+		// 1つのリストに全部入れる。状態はタグの色で見分ける
+		model.addAttribute("tasks", taskService.findAll());
+		model.addAttribute("remaining", taskService.countRemaining());
+
+		// 難易度のドロップダウンを作るために、enum の一覧を渡す
+		model.addAttribute("difficulties", Difficulty.values());
+
+		// templates/tasks.html を表示するという意味
+		return "tasks";
+	}
+
+	// 新しいタスクを追加する
+	@PostMapping("/tasks")
+	public String create(
+			@RequestParam String title,
+			// 未選択のときは null が入る。required = false が必要
+			@RequestParam(required = false) Difficulty difficulty,
+			@RequestParam(required = false)
+			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate) {
+
+		taskService.create(title, difficulty, dueDate);
+		return "redirect:/";
+	}
+
+	// 既存のタスクを書き換える
+	@PostMapping("/tasks/{id}/update")
+	public String update(
+			@PathVariable Long id,   // URL の {id} 部分が入る
+			@RequestParam String title,
+			@RequestParam Difficulty difficulty,
+			@RequestParam(required = false)
+			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate) {
+
+		taskService.update(id, title, difficulty, dueDate);
+		return "redirect:/";
+	}
+
+	// 状態を1つ進める（タグをクリックしたとき）
+	@PostMapping("/tasks/{id}/next")
+	public String next(@PathVariable Long id) {
+		taskService.nextStatus(id);
+		return "redirect:/";
+	}
+
+	// ドラッグで並べ替えた結果を保存する
+	// ids には "3,1,2" のようにIDがカンマ区切りで届く
+	// Spring が自動でカンマを区切って List<Long> にしてくれる
+	@PostMapping("/tasks/reorder")
+	public String reorder(@RequestParam List<Long> ids) {
+		taskService.reorder(ids);
+		return "redirect:/";
+	}
+
+	// 削除する
+	@PostMapping("/tasks/{id}/delete")
+	public String delete(@PathVariable Long id) {
+		taskService.delete(id);
+		return "redirect:/";
+	}
+}

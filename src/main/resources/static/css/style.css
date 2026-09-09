@@ -1,0 +1,429 @@
+/* ===== 色の定義 =====
+   参考画像から取った配色。ここを変えれば全体の色が一度に変わる */
+:root {
+  --ink:    #111111;   /* 線と文字の黒。真っ黒より少しやわらかい */
+  --paper:  #fdfbf4;   /* 画面の背景。クリーム色 */
+  --card:   #ffffff;   /* カードの白 */
+  --panel:  #faf3e4;   /* 入力欄まわりのベージュ */
+  --muted:  #8a8a8a;   /* 補足文字のグレー */
+
+  --pink:   #f0338c;   /* 主役の色。追加ボタン・難易度「高」 */
+  --green:  #86d62e;   /* 完了 */
+  --cyan:   #1ec8d9;   /* 未実施・難易度「低」 */
+  --orange: #ff9020;   /* 進行中・難易度「中」 */
+
+  /* 黒い影。ずらした位置に影を落とすのがこのデザインの特徴 */
+  --shadow:    4px 4px 0 var(--ink);
+  --shadow-sm: 3px 3px 0 var(--ink);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 20px 12px 60px;
+  background: var(--paper);
+  color: var(--ink);
+  /* 丸ゴシック系を優先。無ければ通常のゴシックにする */
+  font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c",
+               system-ui, "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  font-weight: 700;          /* 全体的に太字にしてポップにする */
+  line-height: 1.6;
+}
+
+/* アプリ全体を1枚の白いカードにする */
+.container {
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 20px;
+  box-shadow: 6px 6px 0 var(--ink);
+  padding: 20px 18px 24px;
+  overflow: hidden;          /* 上の3色バーの角をカードに合わせて切る */
+  position: relative;
+}
+
+/* カード上端の3色バー。::before は「要素の前に作る飾り」 */
+.container::before {
+  content: "";               /* 中身は空でよいが、この行が無いと表示されない */
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 10px;
+  /* 3色を3等分で並べる */
+  background: linear-gradient(to right,
+    var(--pink)  0%,    var(--pink)  33.3%,
+    var(--green) 33.3%, var(--green) 66.6%,
+    var(--cyan)  66.6%, var(--cyan)  100%);
+}
+
+/* ===== 見出しと残りタスク数 ===== */
+
+.header { margin-bottom: 18px; }
+
+.app-title {
+  margin: 6px 0 4px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
+.remaining {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+/* 件数を丸いピンクのバッジにする */
+.remaining-num {
+  display: inline-block;
+  min-width: 28px;
+  padding: 2px 8px;
+  margin: 0 4px;
+  border-radius: 999px;
+  background: var(--pink);
+  color: #fff;
+  text-align: center;
+  font-size: 15px;
+}
+
+/* ===== 追加フォーム ===== */
+
+.add-form {
+  background: var(--panel);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 22px;
+}
+
+/* タイトル・難易度・締切を1行に並べる。狭ければ折り返す */
+.add-form-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 入力欄と選択欄の共通の見た目 */
+.input-title,
+.input-difficulty,
+.input-due {
+  border: 3px solid var(--ink);
+  border-radius: 999px;      /* 端を丸くする */
+  background: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 16px;           /* 16px未満だとスマホで勝手に拡大されるので下げない */
+  padding: 10px 16px;
+}
+
+/* 残りの幅を使うが、狭ければ140pxまで縮む */
+.input-title {
+  flex: 1 1 140px;
+  min-width: 0;              /* これが無いと flex の中で縮まない */
+}
+
+.input-difficulty { padding-right: 10px; }
+
+/* 伸びも縮みもせず、幅を固定する。
+   触ったとき type が text から date に変わっても幅が揺れない */
+.input-due {
+  flex: 0 0 auto;
+  width: 150px;
+}
+
+/* 案内用の項目（value="" のもの）が選ばれている間は文字を薄くする。
+   入力欄のプレースホルダーと濃さを揃えるため */
+.input-difficulty:has(option[value=""]:checked) {
+  color: var(--muted);
+}
+
+/* 一覧を開いたときの項目は、通常の濃さに戻す */
+.input-difficulty option { color: var(--ink); }
+
+/* 入力欄の案内文字の色も揃える */
+.input-title::placeholder,
+.input-due::placeholder {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* 入力中は枠をピンクにして、今どこを触っているか分かるようにする */
+.input-title:focus,
+.input-difficulty:focus,
+.input-due:focus {
+  outline: none;
+  border-color: var(--pink);
+  box-shadow: 0 0 0 4px rgba(240, 51, 140, .18);
+}
+
+.btn-add {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: var(--pink);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 17px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+/* 押したときに影の分だけ沈む。ボタンらしい手ごたえが出る */
+.btn-add:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+/* ===== タスク一覧 ===== */
+
+.task-list { list-style: none; margin: 0; padding: 0; }
+
+.empty {
+  margin: 0;
+  padding: 20px 0;
+  color: var(--muted);
+  font-size: 15px;
+  text-align: center;
+}
+
+/* 1行＝1枚のカード */
+.task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+/* ドラッグ中は少し浮かせる */
+.task.dragging {
+  opacity: .7;
+  box-shadow: 6px 6px 0 var(--ink);
+}
+
+/* つまむ場所。touch-action: none で、指で動かしても画面がスクロールしない */
+.drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  touch-action: none;
+  user-select: none;         /* ドラッグ中に文字が選択されるのを防ぐ */
+}
+.drag-handle:active { cursor: grabbing; }
+
+/* form が改行を作らないようにする */
+.task form { display: inline; margin: 0; }
+.status-form { display: inline; }
+
+/* 状態タグ。ボタンだが見た目は丸いラベルにする */
+.tag {
+  display: inline-block;
+  padding: 5px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.tag-TODO  { background: var(--cyan); }
+.tag-DOING { background: var(--orange); }
+.tag-DONE  { background: var(--green); }
+
+.tag:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+/* タイトル。残りの幅を全部使い、長ければ折り返して全文を見せる */
+.task-title {
+  flex: 1 1 140px;
+  margin: 0;
+  font-size: 16px;
+  word-break: break-word;    /* 長い単語も途中で折り返す */
+  white-space: pre-wrap;     /* 入力した空白や改行をそのまま見せる */
+}
+
+/* 完了したものは取り消し線を引き、薄くする */
+.task-DONE .task-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  color: var(--muted);
+}
+
+/* 締切。未設定でも場所を空けて、難易度バッジの位置を揃える */
+.due {
+  min-width: 56px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 難易度バッジ */
+.badge {
+  padding: 4px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+.badge-LOW  { background: var(--cyan); }
+.badge-MID  { background: var(--orange); }
+.badge-HIGH { background: var(--pink); }
+
+/* 編集・削除のアイコン */
+.btn-icon {
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  list-style: none;          /* details の三角を消す */
+}
+.btn-icon::-webkit-details-marker { display: none; }
+.btn-icon:hover { color: var(--pink); }
+.btn-delete:hover { color: var(--pink); }
+
+/* ===== 編集フォーム ===== */
+
+.edit { display: inline; }
+
+/* 開いたときは行の下に幅いっぱいで広がる */
+.edit[open] .edit-form {
+  flex-basis: 100%;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--panel);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  display: block;
+}
+
+.edit-form input[type="text"] {
+  width: 100%;
+  padding: 8px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.edit-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.edit-row select,
+.edit-row input[type="date"] {
+  padding: 6px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.btn-mini {
+  padding: 6px 18px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: var(--pink);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.btn-mini:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+/* 操作の結果を知らせる帯。少し待ってから自然に消える */
+.message {
+  margin: 0 0 14px;
+  padding: 10px 16px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: var(--green);
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+
+  /* fadeOut という動きを、2.5秒かけて1回だけ実行する */
+  /* forwards は「終わった状態のまま止まる」という意味 */
+  animation: fadeOut 2.5s forwards;
+}
+
+/* 0〜60%はそのまま見せて、残りで薄くしながら畳む */
+@keyframes fadeOut {
+  0%, 60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    margin-bottom: 0;
+    padding: 0;
+    border-width: 0;
+    height: 0;
+  }
+}
+
+/* 編集フォームの見出し */
+.edit-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* キャンセルボタン。保存と違って白地にする */
+.btn-cancel {
+  margin-left: auto;         /* ここから右に寄せる */
+  padding: 6px 16px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.btn-cancel:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+/* 編集を開いている行では、行の削除ボタンを隠す（誤操作を防ぐ） */
+/* :has() は「中にこれを含む要素」を指す書き方 */
+.task:has(.edit[open]) .btn-delete {
+  visibility: hidden;
+}
+

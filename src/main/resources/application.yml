@@ -5,13 +5,23 @@ spring:
     active: dev
   jpa:
     open-in-view: false
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            scope: openid, email, profile
+
 ai:
   mock: true
   model: gemini-3.6-flash
   api-key: ${GEMINI_API_KEY:}
   timeout-seconds: 10
   max-attempts: 3
-mail: 
+
+mail:
   mock: true
 
 app:
