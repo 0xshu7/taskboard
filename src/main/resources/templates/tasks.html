@@ -137,7 +137,12 @@
 
     </li>
   </ul>
-
+  <!-- 動作確認用。通知を今すぐ送る -->
+  <form th:action="@{/notify/test}" method="post" class="test-notify">
+    <button type="submit" class="btn-test">通知をテスト送信</button>
+  </form>
+  
+  
 </div>
 
 <!-- 並べ替えの処理。ページの最後で読み込む（先に読むとHTMLがまだ無い） -->

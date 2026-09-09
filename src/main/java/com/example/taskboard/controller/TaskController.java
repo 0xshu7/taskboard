@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import com.example.taskboard.domain.Difficulty;
+import com.example.taskboard.service.NotificationService;
 import com.example.taskboard.service.TaskService;
 
 // 画面を返すクラス。@Controller は「HTMLを返す」という意味
@@ -19,12 +20,12 @@ import com.example.taskboard.service.TaskService;
 @Controller
 public class TaskController {
 
-	// Service を保持する。final なので後から差し替えられない
 	private final TaskService taskService;
+	private final NotificationService notificationService;
 
-	// コンストラクタが1つだけなら、Spring が自動で TaskService を渡してくれる
-	public TaskController(TaskService taskService) {
+	public TaskController(TaskService taskService, NotificationService notificationService) {
 		this.taskService = taskService;
+		this.notificationService = notificationService;
 	}
 
 	// トップページ。一覧を作って画面に渡す
@@ -88,6 +89,13 @@ public class TaskController {
 	@PostMapping("/tasks/{id}/delete")
 	public String delete(@PathVariable Long id) {
 		taskService.delete(id);
+		return "redirect:/";
+	}
+	
+	// 通知を今すぐ送る（動作確認用。あとで消すか、管理者だけに限定する）
+	@PostMapping("/notify/test")
+	public String notifyTest() {
+		notificationService.notifyDueTasks();
 		return "redirect:/";
 	}
 }

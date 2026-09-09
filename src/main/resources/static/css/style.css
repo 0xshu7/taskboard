@@ -427,3 +427,15 @@ body {
   visibility: hidden;
 }
 
+/* 動作確認用のボタン。目立たせない */
+.test-notify { margin-top: 20px; text-align: center; }
+.btn-test {
+  padding: 6px 16px;
+  border: 2px dashed var(--muted);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}

@@ -56,7 +56,13 @@ public class Task {
 	// 完了日時。完了していなければ null。あとで「連続日数」を数えるときに使う
 	@Column(name="completed_at")
 	private LocalDateTime completedAt;
+	
+	// このタスクについて最後に通知した日。まだ通知していなければ null
+	// 「同じ日に二重で送らない」ための目印
+	@Column(name = "notified_date")
+	private LocalDate notifiedDate;
 
+	
 	public Long getId() {
 		return id;
 	}
@@ -127,6 +133,15 @@ public class Task {
 
 	public void setCompletedAt(LocalDateTime completedAt) {
 		this.completedAt = completedAt;
+	
+	}
+
+	public LocalDate getNotifiedDate() {
+		return notifiedDate;
+	}
+
+	public void setNotifiedDate(LocalDate notifiedDate) {
+		this.notifiedDate = notifiedDate;
 	}
 
 }
