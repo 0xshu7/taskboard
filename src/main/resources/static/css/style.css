@@ -439,3 +439,240 @@ body {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* 締切超過。難易度バッジと同じ形にして、ピンクで強く出す */
+.due-over {
+  min-width: auto;           /* .due の幅指定を打ち消す */
+  padding: 4px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--pink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* ===== 完了したタスクの折りたたみ ===== */
+
+.done-box { margin-top: 24px; }
+
+.done-summary {
+  cursor: pointer;
+  list-style: none;          /* 三角を消す */
+  padding: 8px 14px;
+  border: 3px dashed var(--ink);
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 14px;
+  user-select: none;
+}
+.done-summary::-webkit-details-marker { display: none; }
+
+/* 開いているときは下の余白を空ける */
+.done-box[open] .done-summary { margin-bottom: 12px; }
+
+.done-count {
+  display: inline-block;
+  min-width: 24px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 完了リストの行は少し控えめに */
+.done-box .task { opacity: .75; }
+
+/* ===== スタート画面 ===== */
+
+.home { text-align: center; padding-bottom: 40px; }
+
+.home .header { margin-bottom: 40px; }
+
+.tagline {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.start-form { margin: 0 0 32px; }
+
+/* 主役のボタン。追加ボタンと同じくらいの高さに抑える */
+.btn-start {
+  width: 100%;
+  max-width: 320px;
+  padding: 16px;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: var(--pink);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: .1em;
+  cursor: pointer;
+  box-shadow: 6px 6px 0 var(--ink);
+}
+.btn-start:active {
+  transform: translate(6px, 6px);
+  box-shadow: none;
+}
+
+/* タスク一覧への入口。控えめに */
+.to-tasks { margin: 0; }
+.to-tasks a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 15px;
+  border-bottom: 2px dotted var(--muted);
+  padding-bottom: 2px;
+}
+.to-tasks a:hover { color: var(--ink); border-color: var(--ink); }
+
+.to-tasks-count {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 7px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: var(--cyan);
+  color: #fff;
+  font-size: 13px;
+}
+
+/* タスク一覧からスタート画面へ戻るリンク */
+.to-home { margin: 0 0 10px; }
+.to-home a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+.to-home a:hover { color: var(--ink); }
+
+/* ===== 提案画面 ===== */
+
+.proposal-title {
+  margin: 0 0 20px;
+  font-size: 20px;
+  text-align: center;
+}
+
+.card-list { list-style: none; margin: 0 0 20px; padding: 0; }
+
+/* 提案カード1枚 */
+.card {
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* カテゴリ。3色の主張を邪魔しないよう、白地にする */
+.card-category {
+  padding: 3px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.card-minutes {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.card-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  word-break: break-word;
+}
+
+/* 理由。ここが「自分向けだ」と感じさせる部分 */
+.card-reason {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.btn-choose {
+  width: 100%;
+  padding: 14px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.btn-choose:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+/* 別の話題にする。主役ではないので白地に */
+.retopic-form { text-align: center; }
+
+.btn-retopic {
+  padding: 10px 24px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.btn-retopic:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+/* ===== 三択の色分け =====
+   1番目＝ピンク、2番目＝緑、3番目＝シアン。
+   上部の3色バーと同じ並びにして、アプリの顔にする */
+
+/* 番号。左端に丸で置く */
+.card-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* 1番目：シアン */
+.card-1 .card-no     { background: var(--cyan); }
+.card-1 .btn-choose  { background: var(--cyan); color: #fff; }
+
+/* 2番目：緑 */
+.card-2 .card-no     { background: var(--green); color: #fff; }
+.card-2 .btn-choose  { background: var(--green); color: #fff; }
+
+/* 3番目：ピンク */
+.card-3 .card-no     { background: var(--pink); }
+.card-3 .btn-choose  { background: var(--pink); color: #fff; }

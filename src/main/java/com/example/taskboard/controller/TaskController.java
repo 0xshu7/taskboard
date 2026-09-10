@@ -29,16 +29,20 @@ public class TaskController {
 	}
 
 	// トップページ。一覧を作って画面に渡す
-	@GetMapping("/")
+	@GetMapping("/tasks")
 	public String index(Model model) {
 
 		// 1つのリストに全部入れる。状態はタグの色で見分ける
-		model.addAttribute("tasks", taskService.findAll());
+		model.addAttribute("tasks", taskService.findActive());
+		model.addAttribute("doneTasks", taskService.findDone());
 		model.addAttribute("remaining", taskService.countRemaining());
 
 		// 難易度のドロップダウンを作るために、enum の一覧を渡す
 		model.addAttribute("difficulties", Difficulty.values());
 
+		// 締切超過の判定に使う。画面側で LocalDate.now() は呼べないので渡す
+		model.addAttribute("today",java.time.LocalDate.now());
+		
 		// templates/tasks.html を表示するという意味
 		return "tasks";
 	}
@@ -53,7 +57,7 @@ public class TaskController {
 			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate) {
 
 		taskService.create(title, difficulty, dueDate);
-		return "redirect:/";
+		return "redirect:/tasks";
 	}
 
 	// 既存のタスクを書き換える
@@ -66,14 +70,14 @@ public class TaskController {
 			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate) {
 
 		taskService.update(id, title, difficulty, dueDate);
-		return "redirect:/";
+		return "redirect:/tasks";
 	}
 
 	// 状態を1つ進める（タグをクリックしたとき）
 	@PostMapping("/tasks/{id}/next")
 	public String next(@PathVariable Long id) {
 		taskService.nextStatus(id);
-		return "redirect:/";
+		return "redirect:/tasks";
 	}
 
 	// ドラッグで並べ替えた結果を保存する
@@ -82,20 +86,20 @@ public class TaskController {
 	@PostMapping("/tasks/reorder")
 	public String reorder(@RequestParam List<Long> ids) {
 		taskService.reorder(ids);
-		return "redirect:/";
+		return "redirect:/tasks";
 	}
 
 	// 削除する
 	@PostMapping("/tasks/{id}/delete")
 	public String delete(@PathVariable Long id) {
 		taskService.delete(id);
-		return "redirect:/";
+		return "redirect:/tasks";
 	}
 	
 	// 通知を今すぐ送る（動作確認用。あとで消すか、管理者だけに限定する）
 	@PostMapping("/notify/test")
 	public String notifyTest() {
 		notificationService.notifyDueTasks();
-		return "redirect:/";
+		return "redirect:/tasks";
 	}
 }

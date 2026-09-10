@@ -40,3 +40,7 @@ application-local.yml
 *.log
 credentials.json
 *.pem
+
+
+### local database ###
+data/

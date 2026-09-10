@@ -10,24 +10,29 @@
 
 <div class="container">
 
+	
+	<!-- スタート画面へ戻る -->
+	<p class="to-home"><a th:href="@{/}">← スタート</a></p>	
+	
+	
+	
+	
   <!-- ===== 見出しと残りタスク数 ===== -->
   <header class="header">
     <h1 class="app-title">Task Board</h1>
-	<p class="remaining">
-	  残り <span class="remaining-num" id="remaining-num" th:text="${remaining}">0</span> 件
-	</p>
+    <p class="remaining">
+      残り <span class="remaining-num" id="remaining-num" th:text="${remaining}">0</span> 件
+    </p>
   </header>
-  
+
   <!-- ===== 操作の結果メッセージ ===== -->
-  <!-- JavaScript がここにメッセージを差し込む -->
   <div id="message-area">
     <p class="message" th:if="${message}" th:text="${message}">削除しました</p>
   </div>
-  
+
   <!-- ===== 新しいタスクを追加するフォーム ===== -->
   <form class="add-form" th:action="@{/tasks}" method="post">
 
-    <!-- 3つを1行に並べる。狭い画面では自動で折り返す -->
     <div class="add-form-row">
 
       <input class="input-title" type="text" name="title"
@@ -35,7 +40,6 @@
 
       <select class="input-difficulty" name="difficulty">
         <!-- 最初に見えている案内用の項目。value を空にしておく -->
-        <!-- disabled で選べなくし、hidden で開いたときの一覧から隠す -->
         <option value="" selected disabled hidden>難易度</option>
 
         <option th:each="d : ${difficulties}"
@@ -44,111 +48,120 @@
       </select>
 
       <!-- 最初は文字入力にして「締切」と表示する -->
-      <!-- 触ったら日付入力に切り替え、何も入れずに離れたら文字入力に戻す -->
       <input class="input-due" type="text" name="dueDate" placeholder="締切"
              onfocus="this.type='date'; this.showPicker && this.showPicker();"
              onblur="if (!this.value) { this.type='text'; }">
     </div>
 
-    <button class="btn-add" type="submit">追加</button>
+    <button class="btn-add" type="submit">追加する</button>
   </form>
 
   <!-- ===== 並べ替えの結果を送るための、見えないフォーム ===== -->
-  <!-- ドラッグが終わったときに JavaScript がここに順番を入れて送信する -->
   <form id="reorder-form" th:action="@{/tasks/reorder}" method="post">
     <input type="hidden" name="ids" id="reorder-ids">
   </form>
 
-  <!-- ===== タスク一覧（1つのリスト） ===== -->
+  <!-- ===== 未完了のタスク ===== -->
   <p class="empty" th:if="${#lists.isEmpty(tasks)}">まだタスクがありません</p>
 
   <ul class="task-list" id="task-list">
 
-    <!-- data-id は JavaScript から「この行はどのタスクか」を知るための目印 -->
     <li class="task" th:each="task : ${tasks}"
         th:data-id="${task.id}"
         th:classappend="'task-' + ${task.status}">
 
-      <!-- つまむ場所。ここを押したときだけドラッグが始まる -->
       <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
 
-      <!-- 状態タグ。押すと 未実施 → 進行中 → 完了 → 未実施 と一周する -->
       <form th:action="@{'/tasks/' + ${task.id} + '/next'}" method="post" class="status-form">
         <button type="submit" class="tag" th:classappend="'tag-' + ${task.status}">
-          <!-- th:switch は Java の switch と同じ。状態に応じて中身を変える -->
           <span th:switch="${task.status.name()}">
             <span th:case="'TODO'">未実施</span>
             <span th:case="'DOING'">進行中</span>
-            <span th:case="'DONE'">完了</span>
           </span>
         </button>
       </form>
 
-      <!-- タイトル。長くても省略せず、折り返して全部表示する -->
       <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
 
-      <!-- 締切。未設定でも幅を確保しておく（そうしないと難易度バッジの位置がずれる） -->
-      <!-- 三項演算子：条件 ? 真のとき : 偽のとき -->
+      <!-- 締切。今日より前なら「超過」として色を変える -->
       <span class="due"
-            th:text="${task.dueDate != null}
-                     ? '〆 ' + ${#temporals.format(task.dueDate, 'M/d')}
-                     : ''">〆 9/12</span>
+            th:classappend="${task.dueDate != null and task.dueDate.isBefore(today) ? 'due-over' : ''}"
+            th:text="${task.dueDate == null ? ''
+                      : (task.dueDate.isBefore(today)
+                         ? '超過 ' + #temporals.format(task.dueDate, 'M/d')
+                         : '〆 '   + #temporals.format(task.dueDate, 'M/d'))}">〆 9/12</span>
 
-					 <!-- 難易度。null のときは「中」として扱い、画面が落ちないようにする -->
-					 <span class="badge"
-					       th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
-					       th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
+      <span class="badge"
+            th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
+            th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
 
-			<!-- 編集。details は HTML だけで開閉できる仕組み -->
-			<details class="edit">
-			  <summary class="btn-icon" title="編集">✒️</summary>
+      <details class="edit">
+        <summary class="btn-icon" title="編集">✒️</summary>
 
-			  <form class="edit-form" th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
+        <form class="edit-form" th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
+          <p class="edit-title">タスクを編集</p>
+          <input type="text" name="title" th:value="${task.title}" maxlength="100" required>
 
-			    <!-- 何の画面かを示す見出し -->
-			    <p class="edit-title">タスクを編集</p>
+          <div class="edit-row">
+            <select name="difficulty">
+              <option th:each="d : ${difficulties}"
+                      th:value="${d}" th:text="${d.label}"
+                      th:selected="${d == task.difficulty}">中</option>
+            </select>
+            <input type="date" name="dueDate" th:value="${task.dueDate}">
+            <button type="button" class="btn-cancel"
+                    onclick="this.closest('details').open = false;">キャンセル</button>
+            <button class="btn-mini" type="submit">保存</button>
+          </div>
+        </form>
+      </details>
 
-			    <input type="text" name="title" th:value="${task.title}" maxlength="100" required>
-
-			    <div class="edit-row">
-			      <select name="difficulty">
-			        <option th:each="d : ${difficulties}"
-			                th:value="${d}"
-			                th:text="${d.label}"
-			                th:selected="${d == task.difficulty}">中</option>
-			      </select>
-
-			      <input type="date" name="dueDate" th:value="${task.dueDate}">
-
-			      <!-- キャンセル。type="button" にすると送信されない -->
-			      <!-- closest('details') で親の details を探し、open を false にして閉じる -->
-			      <button type="button" class="btn-cancel"
-			              onclick="this.closest('details').open = false;">キャンセル</button>
-
-			      <button class="btn-mini" type="submit">保存</button>
-			    </div>
-			  </form>
-			</details>
-
-			<!-- 削除。JavaScript が delete-form を目印にして横取りする -->
-			<form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
-			  <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
-			</form>
+      <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
+        <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
+      </form>
 
     </li>
   </ul>
+
+  <!-- ===== 完了したタスク（折りたたみ） ===== -->
+  <details class="done-box" th:if="${not #lists.isEmpty(doneTasks)}">
+
+    <summary class="done-summary">
+      完了したタスク
+      <span class="done-count" th:text="${#lists.size(doneTasks)}">0</span>
+    </summary>
+
+    <ul class="task-list">
+      <li class="task task-DONE" th:each="task : ${doneTasks}">
+
+        <!-- 完了済みは並べ替えないので、つまむ部分は出さない -->
+        <form th:action="@{'/tasks/' + ${task.id} + '/next'}" method="post" class="status-form">
+          <button type="submit" class="tag tag-DONE">完了</button>
+        </form>
+
+        <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
+
+        <span class="badge"
+              th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
+              th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
+
+        <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
+          <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
+        </form>
+      </li>
+    </ul>
+  </details>
+
   <!-- 動作確認用。通知を今すぐ送る -->
   <form th:action="@{/notify/test}" method="post" class="test-notify">
     <button type="submit" class="btn-test">通知をテスト送信</button>
   </form>
-  
-  
+
 </div>
 
-<!-- 並べ替えの処理。ページの最後で読み込む（先に読むとHTMLがまだ無い） -->
-<script th:src="@{/js/reorder.js}"></script>
-<!-- 並べ替えの処理。ページの最後で読み込む（先に読むとHTMLがまだ無い） -->
+<!-- 並べ替えと削除の処理。ページの最後で読み込む（先に読むとHTMLがまだ無い） -->
 <script th:src="@{/js/reorder.js}"></script>
 <script th:src="@{/js/delete.js}"></script>
+
 </body>
 </html>

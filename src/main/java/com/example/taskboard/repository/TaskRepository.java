@@ -22,4 +22,10 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
 	// 「userId が一致し、status が DONE でない行の件数」＝ 残りタスク数
 	long countByUserIdAndStatusNot(Long userId, TaskStatus status);
+	
+	// 完了していないタスク（未実施・進行中）を並び順で
+	List<Task> findByUserIdAndStatusNotOrderBySortOrderAsc(Long userId,TaskStatus status);
+	
+	// 完了したタスクを、完了が新しい順で
+	List<Task>findByUserIdAndStatusOrderByCompletedAtDesc(Long userId,TaskStatus status);
 }

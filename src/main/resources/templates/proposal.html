@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task Board</title>
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+
+<div class="container">
+
+  <p class="to-home"><a th:href="@{/}">← スタート</a></p>
+
+  <header class="header">
+    <h1 class="proposal-title">どれかひとつ、やってみませんか</h1>
+  </header>
+  
+  <!-- ===== 3案 ===== -->
+  <ul class="card-list">
+  
+  
+  <!-- position（1〜3）をクラス名にして、カードごとに色を変える -->
+  <li class="card" th:each="card : ${cards}"
+      th:classappend="'card-' + ${card.position}">
+
+    <div class="card-head">
+      <span class="card-no" th:text="${card.position}">1</span>
+      <span class="card-category" th:text="${card.category}">生活</span>
+      <span class="badge" th:classappend="'badge-' + ${card.difficulty}"
+            th:text="${card.difficulty.label}">中</span>
+      <span class="card-minutes" th:text="${card.estimatedMinutes} + '分'">5分</span>
+    </div>
+
+    <p class="card-title" th:text="${card.title}">机の上を5分だけ片づける</p>
+    <p class="card-reason" th:text="${card.reason}">まず手を動かすと、次に進みやすいので</p>
+
+    <form th:action="@{'/proposals/' + ${set.id} + '/choose/' + ${card.id}}" method="post">
+      <button type="submit" class="btn-choose">これにする</button>
+    </form>
+
+  </li>
+
+   
+  </ul>
+
+  <!-- ===== 別の話題にする ===== -->
+  <form th:action="@{'/proposals/' + ${set.id} + '/retopic'}" method="post" class="retopic-form">
+    <button type="submit" class="btn-retopic">別の話題にする</button>
+  </form>
+
+</div>
+
+</body>
+</html>

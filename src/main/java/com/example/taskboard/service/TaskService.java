@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.taskboard.domain.Difficulty;
+import com.example.taskboard.domain.ProposalCard;
 import com.example.taskboard.domain.Task;
 import com.example.taskboard.domain.TaskStatus;
 import com.example.taskboard.repository.TaskRepository;
@@ -34,10 +35,19 @@ public class TaskService {
 
 	}
 
-	// 全部のタスクを並び順で返す
-	public List<Task> findAll() {
-		return taskRepository.findByUserIdOrderBySortOrderAsc(USER_ID);
+	// 未完了のタスク。メインのリストに出す
+	public List<Task> findActive(){
+		return taskRepository.findByUserIdAndStatusNotOrderBySortOrderAsc(USER_ID, TaskStatus.DONE);
+		
 	}
+	
+	// 完了したタスク。折りたたんで下に出す
+	public List<Task>findDone(){
+		return taskRepository.findByUserIdAndStatusOrderByCompletedAtDesc(USER_ID, TaskStatus.DONE);
+		
+	}
+	
+	
 
 	// 状態を1つ進める。未実施 → 進行中 → 完了 → 未実施 と一周する
 	@Transactional
@@ -142,6 +152,20 @@ public class TaskService {
 			}
 		}
 		return max + 1;
+	}
+	
+	// 提案カードからタスクを作る。選んだ＝これからやるので、いきなり進行中にする
+	@Transactional
+	public Task createFromCard(ProposalCard card) {
+		
+		Task task =new Task();
+		task.setUserId(USER_ID);
+		task.setTitle(card.getTitle());
+		task.setDifficulty(card.getDifficulty());
+		task.setStatus(TaskStatus.DOING);
+		task.setSortOrder(nextSortOrder());
+		
+		return taskRepository.save(task);
 	}
 
 }

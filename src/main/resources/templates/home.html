@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task Board</title>
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+
+<div class="container home">
+
+  <header class="header">
+    <h1 class="app-title">Task Board</h1>
+    <p class="tagline">迷っているより、まず実行。ほんの少しでも。</p>
+  </header>
+
+  <!-- ===== スタート ===== -->
+  <!-- 押すと提案を1セット作る。/proposals は次の段階で作る -->
+  <form th:action="@{/proposals}" method="post" class="start-form">
+    <button type="submit" class="btn-start">スタート</button>
+  </form>
+
+  <!-- ===== タスク一覧への入口 ===== -->
+  <!-- 主役はスタートボタンなので、控えめに置く -->
+  <p class="to-tasks">
+    <a th:href="@{/tasks}">
+      タスク一覧
+      <span class="to-tasks-count" th:text="${remaining}">0</span>
+    </a>
+  </p>
+
+</div>
+
+</body>
+</html>
