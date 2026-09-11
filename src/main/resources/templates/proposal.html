@@ -45,7 +45,9 @@
   </ul>
 
   <!-- ===== 別の話題にする ===== -->
-  <form th:action="@{'/proposals/' + ${set.id} + '/retopic'}" method="post" class="retopic-form">
+  <form th:action="@{'/proposals/' + ${set.id} + '/retopic'}" method="post" class="retopic-form"
+        onsubmit="this.querySelector('button').disabled = true;
+                  this.querySelector('button').textContent = '考えています…';">
     <button type="submit" class="btn-retopic">別の話題にする</button>
   </form>
 

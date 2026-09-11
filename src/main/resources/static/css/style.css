@@ -676,3 +676,12 @@ body {
 /* 3番目：ピンク */
 .card-3 .card-no     { background: var(--pink); }
 .card-3 .btn-choose  { background: var(--pink); color: #fff; }
+
+/* 送信中のボタン。押せないことが見て分かるようにする */
+.btn-start:disabled,
+.btn-retopic:disabled {
+  opacity: .6;
+  cursor: wait;
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}

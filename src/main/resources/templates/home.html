@@ -16,8 +16,10 @@
   </header>
 
   <!-- ===== スタート ===== -->
-  <!-- 押すと提案を1セット作る。/proposals は次の段階で作る -->
-  <form th:action="@{/proposals}" method="post" class="start-form">
+  <!-- 押した瞬間にボタンの表示を変える。二重送信も防げる -->
+  <form th:action="@{/proposals}" method="post" class="start-form"
+        onsubmit="this.querySelector('button').disabled = true;
+                  this.querySelector('button').textContent = '考えています…';">
     <button type="submit" class="btn-start">スタート</button>
   </form>
 
