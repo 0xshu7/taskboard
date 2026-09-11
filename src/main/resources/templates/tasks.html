@@ -5,15 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Task Board</title>
   <link rel="stylesheet" th:href="@{/css/style.css}">
+  <link rel="icon" th:href="@{/favicon.ico}" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" th:href="@{/icon-32.png}">
+  <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
+  <link rel="manifest" th:href="@{/site.webmanifest}">
 </head>
 <body>
 
 <div class="container">
 
 	
-	<!-- スタート画面へ戻る -->
-	<p class="to-home"><a th:href="@{/}">← スタート</a></p>	
-	
+	<!-- 上の行。左に戻る、右に設定 -->
+		<p class="to-home">
+			<a th:href="@{/}">← スタート</a>
+			<a class="to-settings" th:href="@{/settings}" title="設定">⚙</a>
+		</p>
 	
 	
 	

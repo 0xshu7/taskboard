@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Task Board</title>
   <link rel="stylesheet" th:href="@{/css/style.css}">
+  <link rel="icon" th:href="@{/favicon.ico}" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" th:href="@{/icon-32.png}">
+  <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
+  <link rel="manifest" th:href="@{/site.webmanifest}">
 </head>
 <body>
 
@@ -23,7 +27,7 @@
     <button type="submit" class="btn-start">スタート</button>
   </form>
 
-  <!-- ===== タスク一覧への入口 ===== -->
+  <!-- ===== 下のリンク ===== -->
   <!-- 主役はスタートボタンなので、控えめに置く -->
   <p class="to-tasks">
     <a th:href="@{/tasks}">

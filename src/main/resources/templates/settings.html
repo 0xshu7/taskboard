@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>設定</title>
+<link rel="stylesheet" th:href="@{/css/style.css}">
+<link rel="icon" th:href="@{/favicon.ico}" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" th:href="@{/icon-32.png}">
+<link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
+<link rel="manifest" th:href="@{/site.webmanifest}">
+</head>
+<body>
+	<div class="container">
+
+		<h1>設定</h1>
+
+		<!-- th:object で、この form が SettingsForm を編集していることを示す -->
+		<form th:action="@{/settings}" th:object="${form}" method="post">
+
+			<!-- ===== 基本 ===== -->
+			<h2 class="section">基本</h2>
+
+			<div class="field">
+				<label for="displayName">表示名</label>
+				<input type="text" th:field="*{displayName}" maxlength="50">
+			</div>
+
+			<!-- ===== 通知 ===== -->
+			<h2 class="section">通知</h2>
+
+			<div class="field">
+				<label>
+					<!-- th:field を使うと、チェックを外したときの処理も自動で入る -->
+					<input type="checkbox" th:field="*{notifyEnabled}">
+					通知メールを受け取る
+				</label>
+			</div>
+
+			<div class="field">
+				<label for="notifyTime">通知する時刻</label>
+				<!-- step="3600" で「時」だけ選ぶ形になる -->
+				<input type="time" th:field="*{notifyTime}" step="3600">
+			</div>
+
+			<div class="field">
+				<label for="notifyEmail">通知先メールアドレス</label>
+				<input type="email" th:field="*{notifyEmail}"
+					placeholder="空なら登録アドレスに送ります">
+			</div>
+
+			<!-- 新しい項目は、この下に <h2 class="section"> から始まる固まりを足す -->
+
+						<button type="submit" class="btn-add">保存する</button>
+		</form>
+
+		<hr class="sep">
+
+		<h2 class="section">本人メモ</h2>
+		<p class="note">AIが提案するときに読んでいる、あなたについての文章です。</p>
+		<button type="button" class="btn-sub" disabled>本人メモを作り直す（準備中）</button>
+
+		<p class="links">
+			<a th:href="@{/}">スタート画面へ</a>
+			<a th:href="@{/tasks}">タスク一覧へ</a>
+		</p>
+
+	</div>
+</body>
+</html>

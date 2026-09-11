@@ -18,7 +18,7 @@ import com.example.taskboard.repository.TaskRepository;
 public class TaskService {
 
 	// ログイン機能を作るまでの仮のユーザーID。差し替えるのはこの1行だけ
-	private static final Long USER_ID = 1L;
+	public static final Long USER_ID = 1L;
 
 	// Repository を受け取って保持する
 	private final TaskRepository taskRepository;

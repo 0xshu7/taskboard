@@ -685,3 +685,75 @@ body {
   transform: translate(3px, 3px);
   box-shadow: none;
 }
+
+
+/* ===== 設定画面 ===== */
+
+/* 項目が増えたときの区切りになる見出し */
+.section {
+	font-size: 1rem;
+	margin: 28px 0 12px 0;
+	padding-bottom: 6px;
+	border-bottom: 3px solid #111;
+}
+
+.field {
+	margin-bottom: 20px;
+}
+
+/* ラベルは1行使って、入力欄の上に置く */
+.field label {
+	display: block;
+	margin-bottom: 6px;
+	font-weight: 700;
+}
+
+/* チェックボックスのラベルだけは横並びにしたいので戻す */
+.field label input[type="checkbox"] {
+	display: inline;
+	margin-right: 6px;
+}
+
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="time"] {
+	width: 100%;
+	box-sizing: border-box;
+	border: 3px solid #111;
+	padding: 10px;
+	font-size: 1rem;
+	background: #fff;
+}
+
+.sep {
+	border: none;
+	border-top: 3px solid #111;
+	margin: 32px 0;
+}
+
+.note {
+	font-size: 0.85rem;
+	color: #666;
+	margin-bottom: 12px;
+}
+
+.links {
+	margin-top: 24px;
+	display: flex;
+	gap: 16px;
+	justify-content: center;
+}
+
+/* 上の行を左右に振り分ける */
+.to-home {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+/* 歯車。本体ではないので控えめに、でも押せる大きさは残す */
+.to-settings {
+	font-size: 1.3rem;
+	text-decoration: none;
+	line-height: 1;
+}
