@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
 <link rel="manifest" th:href="@{/site.webmanifest}">
 </head>
-<body>
+<body th:attr="data-volume=${volume}">
 	<div class="container">
 
 		<h1>設定</h1>
@@ -48,6 +48,21 @@
 					placeholder="空なら登録アドレスに送ります">
 			</div>
 
+			<!-- ===== 音 ===== -->
+			<h2 class="section">音</h2>
+
+			<div class="field">
+				<label for="soundVolume">効果音の音量</label>
+				<div class="volume-row">
+					<input type="range" th:field="*{soundVolume}"
+						min="0" max="100" step="10"
+						oninput="document.getElementById('volume-value').textContent = this.value;">
+					<span id="volume-value" th:text="*{soundVolume}">50</span>
+				</div>
+				<p class="note">0 にすると鳴りません。動かすと今の音量で試せます。</p>
+			</div>
+			
+			
 			<!-- 新しい項目は、この下に <h2 class="section"> から始まる固まりを足す -->
 
 						<button type="submit" class="btn-add">保存する</button>
@@ -65,5 +80,19 @@
 		</p>
 
 	</div>
+	
+	<script>
+		// つまみを離したときに、その音量で鳴らしてみる
+		document.querySelector('input[type="range"]').addEventListener('change', function () {
+			const volume = Number(this.value) / 100;
+			if (volume <= 0) {
+				return;
+			}
+			const sound = new Audio('/sounds/complete.wav');
+			sound.volume = volume;
+			sound.play();
+		});
+	</script>
+	
 </body>
 </html>

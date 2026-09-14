@@ -757,3 +757,417 @@ body {
 	text-decoration: none;
 	line-height: 1;
 }
+
+/* ===== 花吹雪 ===== */
+
+/* 画面全体に重ねる透明な板。クリックは下に素通りさせる */
+.confetti-canvas {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	z-index: 9999;
+}
+
+/* ===== 音量のつまみ ===== */
+
+.volume-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.volume-row input[type="range"] {
+	flex: 1;
+}
+
+.volume-row span {
+	min-width: 2.5em;
+	text-align: right;
+	font-weight: 700;
+}
+
+/* ===== 実績画面 ===== */
+
+/* --- いまのレベル --- */
+
+.level-box {
+	border: 3px solid #111;
+	box-shadow: 6px 6px 0 #111;
+	text-align: center;
+	padding: 28px 16px 22px;
+	margin: 16px 0 12px;
+
+	/* 色は1色だけ。うっすらとした帯を上へ動かして、
+	   数字が変わらなくても進んでいる感じを出す */
+	background: linear-gradient(180deg, #fff 0%, #ffe3f0 35%, #fff 70%);
+	background-size: 100% 250%;
+	animation: level-rise 7s linear infinite;
+}
+
+@keyframes level-rise {
+	from {
+		background-position: 0% 100%;
+	}
+	to {
+		background-position: 0% 0%;
+	}
+}
+
+.level-emoji {
+	margin: 0;
+	font-size: 3.5rem;
+	line-height: 1;
+}
+
+.level-title {
+	margin: 8px 0 0;
+	font-size: 1.4rem;
+	font-weight: 700;
+}
+
+.level-no {
+	margin: 4px 0 0;
+	font-weight: 700;
+	color: #666;
+}
+
+.level-next {
+	text-align: center;
+	margin: 0 0 24px;
+	font-weight: 700;
+}
+
+/* --- この7日間（縦棒・左から古い順） --- */
+
+.week-chart {
+	list-style: none;
+	padding: 0;
+	margin: 0 0 24px;
+
+	display: flex;
+	gap: 8px;
+}
+
+.week-col {
+	flex: 1;
+	text-align: center;
+}
+
+.week-count {
+	display: block;
+	font-size: 0.8rem;
+	font-weight: 700;
+	margin-bottom: 4px;
+}
+
+/* 棒が立つ枠。中身を下端にそろえる */
+.week-track {
+	display: flex;
+	align-items: flex-end;
+	height: 110px;
+	border: 2px solid #111;
+	background: #fff;
+	overflow: hidden;
+}
+
+/* 中身。1色だけ使い、明るい帯を上へ動かす */
+.week-fill {
+	display: block;
+	width: 100%;
+	background: linear-gradient(180deg, #ff6fae 0%, #FF2D8A 50%, #ff6fae 100%);
+	background-size: 100% 200%;
+	animation: week-rise 3s linear infinite;
+}
+
+@keyframes week-rise {
+	from {
+		background-position: 0% 100%;
+	}
+	to {
+		background-position: 0% 0%;
+	}
+}
+
+.week-label {
+	display: block;
+	margin-top: 6px;
+	font-size: 0.85rem;
+	font-weight: 700;
+}
+
+/* 今日の曜日だけ反転させる */
+.week-today .week-label {
+	background: #111;
+	color: #fff;
+}
+
+/* 動きが苦手な人の設定を尊重して、止める */
+@media (prefers-reduced-motion: reduce) {
+	.level-box,
+	.week-fill {
+		animation: none;
+	}
+}
+
+
+/* ===== 角を丸める（実績画面・設定画面） ===== */
+
+/* 大きい箱 */
+.level-box,
+.total-box {
+	border-radius: 14px;
+}
+
+/* 棒グラフの枠。中の棒もここで切り取られて丸くなる */
+.week-track {
+	border-radius: 8px;
+}
+
+/* 称号の行 */
+.title-row {
+	border-radius: 10px;
+}
+
+/* 今日の曜日の反転部分 */
+.week-today .week-label {
+	border-radius: 6px;
+	padding: 2px 0;
+}
+
+/* 設定画面の入力欄 */
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="time"] {
+	border-radius: 8px;
+}
+
+/* 保存ボタン */
+.field + button,
+.btn-add {
+	border-radius: 10px;
+}
+
+/* ===== 編集画面 ===== */
+
+/* 難易度の選択欄も、他の入力欄と同じ見た目にそろえる */
+.field select {
+	width: 100%;
+	box-sizing: border-box;
+	border: 3px solid #111;
+	border-radius: 8px;
+	padding: 10px;
+	font-size: 1rem;
+	background: #fff;
+}
+
+/* キャンセルと保存を横に並べる */
+.edit-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 28px;
+}
+
+.btn-cancel {
+	color: #666;
+	text-decoration: none;
+	font-weight: 700;
+}
+
+/* 削除。取り返しがつかないので、他のボタンと見た目を変える */
+.btn-danger {
+	width: 100%;
+	border: 3px solid #111;
+	border-radius: 10px;
+	background: #fff;
+	color: #c00;
+	font-weight: 700;
+	font-size: 1rem;
+	padding: 12px;
+	cursor: pointer;
+}
+
+.btn-danger:hover {
+	background: #ffecec;
+}
+
+/* ===== 編集画面（続き） ===== */
+
+/* 締切の欄も、他の入力欄と同じ幅・同じ枠にそろえる */
+.field input[type="date"] {
+	width: 100%;
+	box-sizing: border-box;
+	border: 3px solid #111;
+	border-radius: 8px;
+	padding: 10px;
+	font-size: 1rem;
+	background: #fff;
+}
+
+/* 項目名をピンクに。編集画面だけに効かせる */
+.edit-page .field label {
+	color: #FF2D8A;
+}
+
+/* キャンセルと保存を、同じ幅・同じ高さにする */
+.edit-actions {
+	display: flex;
+	gap: 12px;
+	margin-top: 28px;
+}
+
+/* 中の2つを半分ずつに分ける */
+.edit-actions > * {
+	flex: 1;
+}
+
+/* キャンセルは <a> だが、ボタンと同じ見た目にする */
+.btn-cancel {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	box-sizing: border-box;
+	border: 3px solid #111;
+	border-radius: 10px;
+	box-shadow: 4px 4px 0 #111;
+	background: #fff;
+	color: #666;
+	font-weight: 700;
+	font-size: 1rem;
+	padding: 12px;
+	text-decoration: none;
+}
+
+/* 保存ボタンも同じ寸法に合わせる */
+.edit-actions .btn-add {
+	box-sizing: border-box;
+	padding: 12px;
+	font-size: 1rem;
+	margin: 0;
+}
+
+/* 一覧の編集リンク。下線を消して、文字ではなく絵として見せる */
+.btn-icon {
+	text-decoration: none;
+}
+
+/* キャンセルは3分の1、保存は3分の2 */
+.edit-actions .btn-cancel {
+	flex: 1;
+}
+
+.edit-actions .btn-add {
+	flex: 2;
+}
+
+/* ボタンの下にも余白を置いて、上下のバランスをとる */
+.edit-actions {
+	margin-bottom: 32px;
+}
+
+/* 締切の下と、ボタンの上の間をあける */
+.edit-actions {
+	margin-top: 40px;
+}
+
+/* ===== 編集ダイアログ ===== */
+
+.edit-dialog {
+	border: 3px solid #111;
+	border-radius: 14px;
+	box-shadow: 8px 8px 0 #111;
+	padding: 24px;
+	width: min(90vw, 420px);
+}
+
+/* 後ろの一覧を暗くする。ここに一覧があることが分かる濃さにする */
+.edit-dialog::backdrop {
+	background: rgba(0, 0, 0, 0.45);
+}
+
+.edit-heading {
+	margin: 0 0 20px;
+	font-size: 1.2rem;
+}
+
+/* キャンセルは <a> から <button> に変わったので、そちら用に書き直す */
+.edit-actions .btn-cancel {
+	box-sizing: border-box;
+	border: 3px solid #111;
+	border-radius: 10px;
+	box-shadow: 4px 4px 0 #111;
+	background: #fff;
+	color: #666;
+	font-weight: 700;
+	font-size: 1rem;
+	padding: 12px;
+	cursor: pointer;
+}
+
+/* ダイアログをひと回り大きくする */
+.edit-dialog {
+	width: min(92vw, 520px);
+	padding: 36px;
+}
+
+.edit-heading {
+	font-size: 1.5rem;
+	margin-bottom: 28px;
+}
+
+/* 中の入力欄も、それに合わせて少し大きく */
+.edit-dialog .field {
+	margin-bottom: 26px;
+}
+
+.edit-dialog .field input,
+.edit-dialog .field select {
+	padding: 14px;
+	font-size: 1.05rem;
+}
+
+.edit-dialog .edit-actions button {
+	padding: 16px;
+	font-size: 1.05rem;
+}
+
+.edit-dialog {
+	width: min(92vw, 470px);
+	padding: 30px;
+}
+
+.edit-heading {
+	font-size: 1.35rem;
+	margin-bottom: 24px;
+}
+
+.edit-dialog .field {
+	margin-bottom: 22px;
+}
+
+.edit-dialog .field input,
+.edit-dialog .field select {
+	padding: 12px;
+	font-size: 1rem;
+}
+
+.edit-dialog .edit-actions button {
+	padding: 14px;
+	font-size: 1rem;
+}
+/* タスクのやり方。行の一番下に、幅いっぱいで置く */
+.task-detail {
+	width: 100%;              /* これで1行まるごと使い、下に落ちる */
+	white-space: pre-line;    /* 改行をそのまま改行として見せる */
+
+	margin: 10px 0 0 0;
+	padding-left: 12px;
+	border-left: 3px solid #eee;
+
+	line-height: 1.7;
+}
+

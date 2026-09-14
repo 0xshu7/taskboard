@@ -54,14 +54,12 @@ public class RealProposalGenerator implements ProposalGenerator {
 
 		Map<String, Object> body = Map.of(
 				"contents", List.of(
-					Map.of("parts", List.of(Map.of("text", prompt)))),
+						Map.of("parts", List.of(Map.of("text", prompt)))),
 				"generationConfig", Map.of(
-					"responseMimeType", "application/json",
-					"responseSchema", schema(),
-					"thinkingConfig", Map.of("thinkingLevel", "low"),   // ← ここを変更
-					"maxOutputTokens", 800
-				)
-			);
+						"responseMimeType", "application/json",
+						"responseSchema", schema(),
+						"thinkingConfig", Map.of("thinkingLevel", "low"), // ← ここを変更
+						"maxOutputTokens", 800));
 
 		RuntimeException lastError = null;
 
@@ -70,26 +68,33 @@ public class RealProposalGenerator implements ProposalGenerator {
 
 			try {
 				Map<?, ?> response = rest.post()
-					.uri(String.format(ENDPOINT, model))
-					.header("x-goog-api-key", apiKey)
-					.contentType(MediaType.APPLICATION_JSON)
-					.body(body)
-					.retrieve()
-					.body(Map.class);
+						.uri(String.format(ENDPOINT, model))
+						.header("x-goog-api-key", apiKey)
+						.contentType(MediaType.APPLICATION_JSON)
+						.body(body)
+						.retrieve()
+						.body(Map.class);
 
 				return parse(extractText(response));
 
 			} catch (RestClientResponseException e) {
 
-				int status = e.getStatusCode().value();
+				int status = e.getStatusCode().value();  
+				String responseBody = e.getResponseBodyAsString();
 
 				lastError = new IllegalStateException(
-					"Gemini API エラー status=" + status
-					+ " body=" + e.getResponseBodyAsString(), e);
+						"Gemini API エラー status=" + status
+								+ " body=" + responseBody,
+						e);
 
-				// 429（回数制限）と 5xx（サーバー側の問題）だけ再試行する。
+				// 429 には2種類ある。
+				//   1分あたりの制限 → 少し待てば直る
+				//   1日あたりの制限 → 今日はもう直らない（本文に PerDay と書かれている）
+				boolean dailyLimit = responseBody.contains("PerDay");
+
+				// 5xx と、1分あたりの429だけ再試行する。
 				// 403（キー不正）や 404（モデル名不正）は何度試しても直らない
-				boolean retryable = (status == 429 || status >= 500);
+				boolean retryable = (status == 429 && !dailyLimit) || status >= 500;
 				if (!retryable) {
 					throw lastError;
 				}
@@ -111,8 +116,7 @@ public class RealProposalGenerator implements ProposalGenerator {
 			Thread.currentThread().interrupt();
 		}
 	}
-	
-	
+
 	// AI に「この形で返せ」と伝えるための型定義。
 	// これがあると、項目名の揺れや型違いが起きない
 	private Map<String,Object> schema(){
@@ -128,12 +132,14 @@ public class RealProposalGenerator implements ProposalGenerator {
 						"difficulty",        Map.of("type", "STRING",
 						                            "enum", List.of("LOW","MID","HIGH")),
 						"estimatedMinutes",  Map.of("type","INTEGER"),
-						"reason",            Map.of("type","STRING")
-						
+						"reason",            Map.of("type","STRING"),
+						"detail",            Map.of("type","STRING",
+	                    "description", "手順を3行、最後の1行は必ず「終わり：」で始める。改行(\\n)区切り")
+
 				),
 				// 全部必須にする。1つでも欠けたら AI 側でやり直してくれる
 				"required",List.of("title","category","granularity",
-						"difficulty","estimatedMinutes","reason")
+						"difficulty","estimatedMinutes","reason","detail")
 				
 				);
 		return Map.of(
@@ -145,35 +151,34 @@ public class RealProposalGenerator implements ProposalGenerator {
 			);
 	
 	}
-	
+
 	// Gemini の応答から、本文の文字列だけを取り出す
 	@SuppressWarnings("unchecked")
-	private String extractText(Map<?, ?>response) {
-		
-		if(response==null) {
+	private String extractText(Map<?, ?> response) {
+
+		if (response == null) {
 			throw new IllegalStateException("Gemini の応答が空です");
 		}
-		
-		List<Map<String,Object>> candidates=
-				(List<Map<String,Object>>) response.get("candidates");
-		
-		if(candidates==null||candidates.isEmpty()) {
-			throw new IllegalStateException ("candidates がありません: "+response);
-			
+
+		List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
+
+		if (candidates == null || candidates.isEmpty()) {
+			throw new IllegalStateException("candidates がありません: " + response);
+
 		}
-		
-		Map<String,Object>content= (Map<String, Object>) candidates.get(0).get("content");
-		List<Map<String,Object>>parts=(List<Map<String,Object>>)content.get("parts");
-		
+
+		Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
+		List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
+
 		return String.valueOf(parts.get(0).get("text"));
-		
+
 	}
-	
+
 	// JSON の文字列を ProposalCard のリストに変換する
-	private List<ProposalCard>parse(String json){
-		
-		List<ProposalCard>cards = new ArrayList<>();
-		
+	private List<ProposalCard> parse(String json) {
+
+		List<ProposalCard> cards = new ArrayList<>();
+
 		try {
 			// JSON を木構造として読み込む
 			JsonNode root = mapper.readTree(json);
@@ -182,13 +187,13 @@ public class RealProposalGenerator implements ProposalGenerator {
 			if (array == null || !array.isArray()) {
 				throw new IllegalStateException("cards が配列ではありません: " + json);
 			}
-			
+
 			// 3枚を超えて返ってきても、先頭3枚だけ使う
-			int limit =Math.min(array.size(), 3);
-			
-			for(int i=0;i<limit;i++) {
-				JsonNode node=array.get(i);
-				
+			int limit = Math.min(array.size(), 3);
+
+			for (int i = 0; i < limit; i++) {
+				JsonNode node = array.get(i);
+
 				ProposalCard card = new ProposalCard();
 				card.setTitle(node.get("title").asString());
 				card.setCategory(node.get("category").asString());
@@ -196,19 +201,20 @@ public class RealProposalGenerator implements ProposalGenerator {
 				card.setDifficulty(Difficulty.valueOf(node.get("difficulty").asString()));
 				card.setEstimatedMinutes(node.get("estimatedMinutes").asInt());
 				card.setReason(node.get("reason").asString());
+				card.setDetail(node.get("detail").asString());
 				
 				cards.add(card);
-				
+
 			}
-			
-		}catch (Exception e) {
-			throw new IllegalStateException("AI応答の解析に失敗しました: "+ json, e);
-			
-		}
-		
+
+		} catch (Exception e) {
+			throw new IllegalStateException("AI応答の解析に失敗しました: " + json, e);
+
+		} 
+
 		if (cards.isEmpty()) {
 			throw new IllegalStateException("カードが1枚もありません: " + json);
-			
+
 		}
 		return cards;
 	}

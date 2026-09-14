@@ -1,5 +1,4 @@
 package com.example.taskboard.controller;
-
 import java.time.LocalDate;
 import java.util.List;
 
@@ -13,7 +12,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.example.taskboard.domain.Difficulty;
 import com.example.taskboard.service.NotificationService;
+import com.example.taskboard.service.RecordService;
 import com.example.taskboard.service.TaskService;
+import com.example.taskboard.service.UserService;
 
 // 画面を返すクラス。@Controller は「HTMLを返す」という意味
 // （@RestController だと文字やJSONをそのまま返してしまう）
@@ -22,10 +23,15 @@ public class TaskController {
 
 	private final TaskService taskService;
 	private final NotificationService notificationService;
+	private final UserService userService;
+	private final RecordService recordService;
 
-	public TaskController(TaskService taskService, NotificationService notificationService) {
+	public TaskController(TaskService taskService, NotificationService notificationService,
+			UserService userService, RecordService recordService) {
 		this.taskService = taskService;
 		this.notificationService = notificationService;
+		this.userService = userService;
+		this.recordService = recordService;
 	}
 
 	// トップページ。一覧を作って画面に渡す
@@ -36,6 +42,7 @@ public class TaskController {
 		model.addAttribute("tasks", taskService.findActive());
 		model.addAttribute("doneTasks", taskService.findDone());
 		model.addAttribute("remaining", taskService.countRemaining());
+		model.addAttribute("volume", userService.current().getSoundVolume());
 
 		// 難易度のドロップダウンを作るために、enum の一覧を渡す
 		model.addAttribute("difficulties", Difficulty.values());
@@ -43,9 +50,40 @@ public class TaskController {
 		// 締切超過の判定に使う。画面側で LocalDate.now() は呼べないので渡す
 		model.addAttribute("today",java.time.LocalDate.now());
 		
+		
+		
 		// templates/tasks.html を表示するという意味
 		return "tasks";
 	}
+	
+	// タスクの編集画面
+	@GetMapping("/tasks/{id}/edit")
+	public String edit(@PathVariable Long id, Model model) {
+
+		model.addAttribute("task", taskService.findById(id));
+		model.addAttribute("difficulties", Difficulty.values());
+
+		return "edit";
+	}
+	
+	
+	
+	// 実績画面
+	@GetMapping("/record")
+	public String record(Model model) {
+		
+		model.addAttribute("level",recordService.level());
+		model.addAttribute("points", recordService.points());
+		model.addAttribute("remaining", recordService.remainingToNext());
+		model.addAttribute("levels", recordService.allLevels());
+		model.addAttribute("days", recordService.lastSevenDays());
+		model.addAttribute("done", recordService.countDone());
+		model.addAttribute("chosen", recordService.countChosen());
+		
+		return "record";
+	}
+	
+	
 
 	// 新しいタスクを追加する
 	@PostMapping("/tasks")

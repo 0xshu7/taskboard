@@ -1,6 +1,6 @@
 package com.example.taskboard.repository;
-
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -28,4 +28,12 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	
 	// 完了したタスクを、完了が新しい順で
 	List<Task>findByUserIdAndStatusOrderByCompletedAtDesc(Long userId,TaskStatus status);
+
+	/** 通算の完了件数 */
+	long countByUserIdAndStatus(Long userId,TaskStatus status);
+	
+	/** ある時刻より後に完了したタスク。週のグラフを作るのに使う */
+	List<Task> findByUserIdAndStatusAndCompletedAtAfter(
+			Long userId, TaskStatus status, LocalDateTime completedAt);
+
 }

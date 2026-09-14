@@ -8,14 +8,17 @@ import org.springframework.web.bind.annotation.PostMapping;
 
 import com.example.taskboard.domain.ProposalSet;
 import com.example.taskboard.service.ProposalService;
+import com.example.taskboard.service.UserService;
 
 @Controller
 public class ProposalController {
 
 	private final ProposalService proposalService;
+	private final UserService userService;
 
-	public ProposalController(ProposalService proposalService) {
+	public ProposalController(ProposalService proposalService, UserService userService) {
 		this.proposalService = proposalService;
+		this.userService = userService;
 	}
 
 	// スタートボタンを押したとき。3案を出してその画面へ移る
@@ -36,6 +39,7 @@ public class ProposalController {
 
 		model.addAttribute("set", proposalService.findSet(setId));
 		model.addAttribute("cards", proposalService.findCards(setId));
+		model.addAttribute("volume", userService.current().getSoundVolume());
 
 		return "proposal";
 	}

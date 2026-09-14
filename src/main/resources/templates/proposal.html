@@ -10,14 +10,14 @@
   <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
   <link rel="manifest" th:href="@{/site.webmanifest}">
 </head>
-<body>
+<body th:attr="data-volume=${volume}">
 
 <div class="container">
 
   <p class="to-home"><a th:href="@{/}">← スタート</a></p>
 
   <header class="header">
-    <h1 class="proposal-title">どれかひとつ、やってみませんか</h1>
+    <h1 class="proposal-title">どれかひとつ、やってみよう</h1>
   </header>
   
   <!-- ===== 3案 ===== -->
@@ -39,9 +39,10 @@
     <p class="card-title" th:text="${card.title}">机の上を5分だけ片づける</p>
     <p class="card-reason" th:text="${card.reason}">まず手を動かすと、次に進みやすいので</p>
 
-    <form th:action="@{'/proposals/' + ${set.id} + '/choose/' + ${card.id}}" method="post">
-      <button type="submit" class="btn-choose">これにする</button>
-    </form>
+	<form class="choose-form"
+	      th:action="@{'/proposals/' + ${set.id} + '/choose/' + ${card.id}}" method="post">
+	  <button type="submit" class="btn-choose">これにする</button>
+	</form>
 
   </li>
 
@@ -52,10 +53,10 @@
   <form th:action="@{'/proposals/' + ${set.id} + '/retopic'}" method="post" class="retopic-form"
         onsubmit="this.querySelector('button').disabled = true;
                   this.querySelector('button').textContent = '考えています…';">
-    <button type="submit" class="btn-retopic">別の話題にする</button>
-  </form>
+				    <button type="submit" class="btn-retopic">別の話題にする</button>
+				  </form>
 
 </div>
-
+<script th:src="@{/js/effects.js}"></script>
 </body>
 </html>

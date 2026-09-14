@@ -28,6 +28,8 @@ public class SettingsForm {
 	
 	private String notifyEmail;
 	
+	private Integer soundVolume;
+	
 	/** いまの設定を、画面用に写す */
 	public static SettingsForm from(User user) {
 		SettingsForm form = new SettingsForm();
@@ -36,6 +38,7 @@ public class SettingsForm {
 		form.setNotifyEnabled(user.isNotifyEnabled());
 		form.setNotifyTime(user.getNotifyTime()==null ? "" :user.getNotifyTime().toString());
 		form.setNotifyEmail(user.getNotifyEmail());
+		form.setSoundVolume(user.getSoundVolume() == null ? 50 : user.getSoundVolume());
 		
 		return form;
 		
@@ -47,6 +50,7 @@ public class SettingsForm {
 		user.setNotifyEnabled(notifyEnabled);
 		user.setNotifyTime(toTime(notifyTime));
 		user.setNotifyEmail(notifyEmail);
+		user.setSoundVolume(soundVolume);
 		
 	}
 	
@@ -93,5 +97,15 @@ public class SettingsForm {
 	public void setNotifyEmail(String notifyEmail) {
 		this.notifyEmail = notifyEmail;
 	}
+	
+	public Integer getSoundVolume() {
+		return soundVolume;
+	}
+	
+	public void setSoundVolume(Integer soundVolume) {
+		this.soundVolume=soundVolume;
+		
+	}
+	
 }
 

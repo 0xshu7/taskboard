@@ -61,8 +61,20 @@ public class Task {
 	// 「同じ日に二重で送らない」ための目印
 	@Column(name = "notified_date")
 	private LocalDate notifiedDate;
+	
+	/** やり方と終わりの線。AIの提案から作ったタスクだけ入る（手入力のタスクは空） */
+	@Column(length=300)
+	private String detail;
 
 	
+	public String getDetail() {
+		return detail;
+	}
+
+	public void setDetail(String detail) {
+		this.detail = detail;
+	}
+
 	public Long getId() {
 		return id;
 	}

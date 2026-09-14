@@ -161,6 +161,7 @@ public class TaskService {
 		Task task =new Task();
 		task.setUserId(USER_ID);
 		task.setTitle(card.getTitle());
+		task.setDetail(card.getDetail());
 		task.setDifficulty(card.getDifficulty());
 		task.setStatus(TaskStatus.DOING);
 		task.setSortOrder(nextSortOrder());

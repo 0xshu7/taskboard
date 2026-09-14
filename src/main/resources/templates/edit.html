@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>タスクを編集</title>
+<link rel="stylesheet" th:href="@{/css/style.css}">
+<link rel="icon" th:href="@{/favicon.ico}" sizes="any">
+</head>
+<body>
+
+		<div class="container edit-page">
+
+		<p class="to-home"><a th:href="@{/tasks}">← タスク一覧</a></p>
+
+		<h1>タスクを編集</h1>
+
+		<!-- 保存のフォーム。1項目につき1行 -->
+		<form th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
+
+			<div class="field">
+				<label for="title">タイトル</label>
+				<input type="text" id="title" name="title"
+					th:value="${task.title}" maxlength="100" required autocomplete="off">
+			</div>
+
+			<div class="field">
+				<label for="difficulty">難易度</label>
+				<select id="difficulty" name="difficulty">
+					<option th:each="d : ${difficulties}"
+						th:value="${d}" th:text="${d.label}"
+						th:selected="${d == task.difficulty}">中</option>
+				</select>
+			</div>
+
+			<div class="field">
+				<label for="dueDate">締切</label>
+				<input type="date" id="dueDate" name="dueDate" th:value="${task.dueDate}">
+			</div>
+
+			<div class="edit-actions">
+				<a class="btn-cancel" th:href="@{/tasks}">キャンセル</a>
+				<button type="submit" class="btn-add">保存する</button>
+			</div>
+		</form>
+
+		
+
+	</div>
+
+</body>
+</html>

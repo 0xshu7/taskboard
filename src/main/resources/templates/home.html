@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
   <link rel="manifest" th:href="@{/site.webmanifest}">
 </head>
-<body>
+<body th:attr="data-volume=${volume}">
 
 <div class="container home">
 
@@ -21,9 +21,7 @@
 
   <!-- ===== スタート ===== -->
   <!-- 押した瞬間にボタンの表示を変える。二重送信も防げる -->
-  <form th:action="@{/proposals}" method="post" class="start-form"
-        onsubmit="this.querySelector('button').disabled = true;
-                  this.querySelector('button').textContent = '考えています…';">
+  <form th:action="@{/proposals}" method="post" class="start-form">
     <button type="submit" class="btn-start">スタート</button>
   </form>
 
@@ -37,6 +35,6 @@
   </p>
 
 </div>
-
+<script th:src="@{/js/effects.js}"></script>
 </body>
 </html>

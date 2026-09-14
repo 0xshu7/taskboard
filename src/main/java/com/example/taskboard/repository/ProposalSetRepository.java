@@ -1,5 +1,4 @@
 package com.example.taskboard.repository;
-
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,4 +12,7 @@ public interface ProposalSetRepository extends JpaRepository<ProposalSet, Long> 
 	// findFirst で「最初の1件だけ」という意味になる
 	Optional<ProposalSet> findFirstByUserIdAndStatusOrderByIdDesc(
 			Long userId, ProposalStatus status);
+	
+	/** 3択から選んだ回数。status が CHOSEN のものを数える */
+	long countByUserIdAndStatus(Long userId,ProposalStatus status);
 }

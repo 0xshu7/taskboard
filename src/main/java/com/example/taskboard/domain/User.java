@@ -53,6 +53,9 @@ public class User {
 	@Column(name="last_notified_date")
 	private LocalDate lastNotifiedDate;
 	
+	/** 効果音の音量。0〜100。0 で無音 */
+	@Column(name="sound_volume")
+	private Integer soundVolume=50;
 	
 	public boolean isNotifyEnabled() {
 		return notifyEnabled;
@@ -84,6 +87,14 @@ public class User {
 
 	public void setLastNotifiedDate(LocalDate lastNotifiedDate) {
 		this.lastNotifiedDate = lastNotifiedDate;
+	}
+	
+	public Integer getSoundVolume() {
+		return soundVolume;
+	}
+	
+	public void setSoundVolume(Integer soundVolume) {
+		this.soundVolume=soundVolume;
 	}
 	
 	/** 表示名は設定画面で変えられるので setter が要る */

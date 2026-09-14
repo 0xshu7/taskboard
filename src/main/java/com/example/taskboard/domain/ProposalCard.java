@@ -33,6 +33,19 @@ public class ProposalCard {
 	@Column(length=30)
 	private String category;
 	
+	/** 選んだあとに見る、具体的な手順と終わりの線。改行区切りで3〜4行 */
+	@Column(length=300)
+	private String detail;
+	
+	
+	public String getDetail() {
+		return detail;
+	}
+
+	public void setDetail(String detail) {
+		this.detail = detail;
+	}
+
 	@Enumerated(EnumType.STRING)
 	@Column(length=10)
 	private Granularity granularity;

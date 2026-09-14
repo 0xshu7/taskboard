@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>これまで</title>
+<link rel="stylesheet" th:href="@{/css/style.css}">
+<link rel="icon" th:href="@{/favicon.ico}" sizes="any">
+</head>
+<body>
+
+	<div class="container">
+
+		<p class="to-home"><a th:href="@{/tasks}">← タスク一覧</a></p>
+
+		<!-- ===== いまのレベル ===== -->
+		<!-- 背景のグラデーションが上へ動く。数字が止まっていても、上がっている感じを出すため -->
+		<div class="level-box">
+			<p class="level-emoji" th:text="${level.emoji}">🏃</p>
+			<p class="level-title" th:text="${level.title}">かけだし</p>
+			<p class="level-no" th:text="'Lv.' + ${level.number}">Lv.3</p>
+		</div>
+
+		<p class="level-next" th:if="${remaining != null}"
+			th:text="'次のレベルまで あと ' + ${remaining} + ' 回'">次のレベルまで あと 5 回</p>
+		<p class="level-next" th:if="${remaining == null}">いちばん上に届いています</p>
+
+		<!-- ===== この7日間 ===== -->
+		<h2 class="section">この7日間</h2>
+
+		<ul class="week-chart">
+			<li class="week-col" th:each="day : ${days}"
+				th:classappend="${day.today} ? 'week-today' : ''">
+
+				<span class="week-count" th:text="${day.count}">0</span>
+
+				<!-- 棒が立つ土台。中身は下から積み上がる -->
+				<span class="week-track">
+					<span class="week-fill" th:style="'height:' + ${day.percent} + '%'"></span>
+				</span>
+
+				<span class="week-label" th:text="${day.label}">月</span>
+			</li>
+		</ul>
+
+		<!-- ===== 通算 ===== -->
+		<div class="total-row">
+			<div class="total-box">
+				<p class="total-num" th:text="${done}">0</p>
+				<p class="total-label">やり切った</p>
+			</div>
+			<div class="total-box">
+				<p class="total-num" th:text="${chosen}">0</p>
+				<p class="total-label">選んだ</p>
+			</div>
+		</div>
+
+		<!-- ===== 称号 ===== -->
+		<h2 class="section">称号</h2>
+
+		<ul class="title-list">
+			<li class="title-row" th:each="lv : ${levels}"
+				th:classappend="${points >= lv.requiredPoints} ? 'title-open' : 'title-locked'">
+
+				<!-- 届いていれば中身を出す。まだなら鍵とハテナ -->
+				<span th:if="${points >= lv.requiredPoints}">
+					<span class="title-emoji" th:text="${lv.emoji}">🥚</span>
+					<span class="title-name" th:text="${lv.title}">たまご</span>
+				</span>
+
+				<span th:unless="${points >= lv.requiredPoints}">
+					<span class="title-emoji">🔒</span>
+					<span class="title-name">？？？</span>
+				</span>
+			</li>
+		</ul>
+
+	</div>
+
+</body>
+</html>

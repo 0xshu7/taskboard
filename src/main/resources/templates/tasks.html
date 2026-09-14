@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
   <link rel="manifest" th:href="@{/site.webmanifest}">
 </head>
-<body>
+<body th:attr="data-volume=${volume}">
 
 <div class="container">
 
@@ -18,7 +18,8 @@
 	<!-- 上の行。左に戻る、右に設定 -->
 		<p class="to-home">
 			<a th:href="@{/}">← スタート</a>
-			<a class="to-settings" th:href="@{/settings}" title="設定">⚙</a>
+			<a th:href="@{/record}">実 績</a>
+			<a class="to-settings" th:href="@{/settings}" title="設定">設 定 →</a>
 		</p>
 	
 	
@@ -79,7 +80,9 @@
       <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
 
       <form th:action="@{'/tasks/' + ${task.id} + '/next'}" method="post" class="status-form">
-        <button type="submit" class="tag" th:classappend="'tag-' + ${task.status}">
+		<button type="submit" class="tag" th:classappend="'tag-' + ${task.status}"
+		        th:attr="data-celebrate=${task.status.name() == 'DOING'},
+		                 data-begin=${task.status.name() == 'TODO'}">
           <span th:switch="${task.status.name()}">
             <span th:case="'TODO'">未実施</span>
             <span th:case="'DOING'">進行中</span>
@@ -89,6 +92,8 @@
 
       <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
 
+	
+	  
       <!-- 締切。今日より前なら「超過」として色を変える -->
       <span class="due"
             th:classappend="${task.dueDate != null and task.dueDate.isBefore(today) ? 'due-over' : ''}"
@@ -101,32 +106,57 @@
             th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
             th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
 
-      <details class="edit">
-        <summary class="btn-icon" title="編集">✒️</summary>
+			<!-- 編集ボタン。押すとダイアログが前に出る -->
+			<button type="button" class="btn-icon btn-edit" title="編集"
+			        th:attr="data-target='edit-' + ${task.id}">✒️</button>
 
-        <form class="edit-form" th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
-          <p class="edit-title">タスクを編集</p>
-          <input type="text" name="title" th:value="${task.title}" maxlength="100" required>
+			<!-- 編集ダイアログ。押すまでは表示されない -->
+			<dialog th:id="'edit-' + ${task.id}" class="edit-dialog">
+			  <div class="edit-page">
 
-          <div class="edit-row">
-            <select name="difficulty">
-              <option th:each="d : ${difficulties}"
-                      th:value="${d}" th:text="${d.label}"
-                      th:selected="${d == task.difficulty}">中</option>
-            </select>
-            <input type="date" name="dueDate" th:value="${task.dueDate}">
-            <button type="button" class="btn-cancel"
-                    onclick="this.closest('details').open = false;">キャンセル</button>
-            <button class="btn-mini" type="submit">保存</button>
-          </div>
-        </form>
-      </details>
+			    <h2 class="edit-heading">タスクを編集</h2>
+
+			    <form th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
+
+			      <div class="field">
+			        <!-- id は画面の中で1つだけにする必要があるので、タスクIDを付けて区別する -->
+			        <label th:for="'title-' + ${task.id}">タイトル</label>
+			        <input type="text" th:id="'title-' + ${task.id}" name="title"
+			               th:value="${task.title}" maxlength="100" required autocomplete="off">
+			      </div>
+
+			      <div class="field">
+			        <label th:for="'difficulty-' + ${task.id}">難易度</label>
+			        <select th:id="'difficulty-' + ${task.id}" name="difficulty">
+			          <option th:each="d : ${difficulties}"
+			                  th:value="${d}" th:text="${d.label}"
+			                  th:selected="${d == task.difficulty}">中</option>
+			        </select>
+			      </div>
+
+			      <div class="field">
+			        <label th:for="'due-' + ${task.id}">締切</label>
+			        <input type="date" th:id="'due-' + ${task.id}" name="dueDate"
+			               th:value="${task.dueDate}">
+			      </div>
+
+			      <div class="edit-actions">
+			        <button type="button" class="btn-cancel"
+			                onclick="this.closest('dialog').close()">キャンセル</button>
+			        <button type="submit" class="btn-add">保存する</button>
+			      </div>
+			    </form>
+
+			  </div>
+			</dialog>
 
       <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
         <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
       </form>
-
+	  <!-- AIの提案から作ったタスクだけ、やり方が入っている -->
+	          <p class="task-detail" th:if="${task.detail != null}" th:text="${task.detail}"></p>
     </li>
+	
   </ul>
 
   <!-- ===== 完了したタスク（折りたたみ） ===== -->
@@ -147,6 +177,8 @@
 
         <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
 
+	
+		
         <span class="badge"
               th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
               th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
@@ -168,6 +200,14 @@
 <!-- 並べ替えと削除の処理。ページの最後で読み込む（先に読むとHTMLがまだ無い） -->
 <script th:src="@{/js/reorder.js}"></script>
 <script th:src="@{/js/delete.js}"></script>
-
+<script th:src="@{/js/effects.js}"></script>
+<script>
+	// 編集ボタンを押したら、その行のダイアログを前に出す
+	document.querySelectorAll(".btn-edit").forEach(function (button) {
+		button.addEventListener("click", function () {
+			document.getElementById(button.dataset.target).showModal();
+		});
+	});
+</script>
 </body>
 </html>
