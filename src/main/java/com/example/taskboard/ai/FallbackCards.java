@@ -1,5 +1,14 @@
 package com.example.taskboard.ai;
 
+// ===== インポート =====
+// java.util.ArrayList … リストの実装
+// java.util.List      … リストの型
+//
+// 以下はこのアプリの部品。
+// Difficulty   … 難易度
+// Granularity  … タスクの粒度
+// ProposalCard … 提案カード1枚
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -7,15 +16,56 @@ import com.example.taskboard.domain.Difficulty;
 import com.example.taskboard.domain.Granularity;
 import com.example.taskboard.domain.ProposalCard;
 
-// AI が使えないときに出す、決まった3案。
-// モック（開発用）と、AI失敗時のフォールバックの両方で使う。
-// 「AIが落ちてもアプリは止まらない」ための最後の受け皿
+/**
+ * AI が使えないときに出す、決まった3案。
+ *
+ * 使われるのは2つの場面。
+ * 1. 開発中（MockProposalGenerator から）
+ * 2. AI の呼び出しに失敗したとき（ProposalService から）
+ *
+ * 「AI が落ちてもアプリは止まらない」ための最後の受け皿になっている。
+ * 応答が遅い、形式が崩れる、混み合って断られる、1日の上限に達する。
+ * 外のサービスを呼ぶ以上、こうしたことは必ず起きる。
+ * そのとき画面にエラーを出すのではなく、3案を出して先へ進めるようにしている。
+ *
+ * 3案の中身は、誰にでも当てはまるものにしてある。
+ * その人のことを知らずに出すので、外しようのないものだけを並べる。
+ *
+ * detail の最後の行は、必ず「終わり：」で始まる。
+ * AI が返すものと同じ形にしておかないと、
+ * フォールバックしたときだけ画面の見え方が変わってしまう。
+ */
 public class FallbackCards {
 
-	// インスタンスを作る必要がないクラスなので、コンストラクタを隠す
+	// ===== コンストラクタ =====
+
+	/**
+	 * 外から作れないようにする。
+	 *
+	 * このクラスは値を持たず、static のメソッドを呼ぶためだけにある。
+	 * new しても意味がないので、コンストラクタを private にして塞いでいる。
+	 *
+	 * 書かないと、Java が「引数なしのコンストラクタ」を勝手に用意してしまい、
+	 * new FallbackCards() と書けてしまう。
+	 */
 	private FallbackCards() {
 	}
 
+	// ===== メソッド =====
+
+	/**
+	 * 固定の3案を作って返す。
+	 *
+	 * static が付いているので、FallbackCards.create() のようにクラス名から呼ぶ。
+	 * 値を持たないクラスなので、インスタンスを作る必要がない。
+	 *
+	 * 呼ばれるたびに新しく作っている。
+	 * 作っておいたものを使い回すと、呼び出した側が中身を書き換えたときに、
+	 * 次に呼んだ人まで影響を受ける。
+	 * 実際、選ばれたカードには chosen の印が付くので、使い回してはいけない。
+	 *
+	 * @return 3枚のカード
+	 */
 	public static List<ProposalCard> create() {
 
 		List<ProposalCard> cards = new ArrayList<>();
@@ -38,6 +88,27 @@ public class FallbackCards {
 		return cards;
 	}
 
+	/**
+	 * カードを1枚作る。
+	 *
+	 * private なので、このクラスの中からしか呼べない。
+	 * 同じ7行を3回書かずに済ませるための、内部だけの道具。
+	 *
+	 * 引数が7つと多いが、カードの項目がそのまま並んでいるだけなので、
+	 * 上の呼び出しと見比べれば対応が分かる。
+	 *
+	 * \n は改行を表す。detail の行の区切りに使っている。
+	 * 文字列の中に改行を埋め込む書き方で、画面側で改行として表示される。
+	 *
+	 * @param title       見出し
+	 * @param category    種類
+	 * @param granularity 粒度
+	 * @param difficulty  難易度
+	 * @param minutes     かかる時間の目安
+	 * @param reason      勧める理由
+	 * @param detail      手順と終わりの線
+	 * @return できあがったカード
+	 */
 	private static ProposalCard card(String title, String category,
 			Granularity granularity, Difficulty difficulty,
 			int minutes, String reason, String detail) {
@@ -50,6 +121,7 @@ public class FallbackCards {
 		c.setEstimatedMinutes(minutes);
 		c.setReason(reason);
 		c.setDetail(detail);
+
 		return c;
 	}
 }

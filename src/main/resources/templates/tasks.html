@@ -14,23 +14,20 @@
 
 <div class="container">
 
-	
-	<!-- 上の行。左に戻る、右に設定 -->
-		<p class="to-home">
-			<a th:href="@{/}">← スタート</a>
-			<a th:href="@{/record}">実 績</a>
-			<a class="to-settings" th:href="@{/settings}" title="設定">設 定 →</a>
-		</p>
-	
-	
-	
   <!-- ===== 見出しと残りタスク数 ===== -->
   <header class="header">
-    <h1 class="app-title">Task Board</h1>
+    <h1 class="app-title"><a th:href="@{/}">Task Board</a></h1>
     <p class="remaining">
       残り <span class="remaining-num" id="remaining-num" th:text="${remaining}">0</span> 件
     </p>
   </header>
+  
+  <!-- ===== 画面の行き来 ===== -->
+  <nav class="tabs">
+  
+    <a class="tab" th:href="@{/}">スタート</a>
+    <a class="tab-gear" th:href="@{/settings}" title="設定">⚙</a>
+  </nav>
 
   <!-- ===== 操作の結果メッセージ ===== -->
   <div id="message-area">
@@ -73,90 +70,111 @@
 
   <ul class="task-list" id="task-list">
 
-    <li class="task" th:each="task : ${tasks}"
-        th:data-id="${task.id}"
-        th:classappend="'task-' + ${task.status}">
+	<li class="task" th:each="task : ${tasks}"
+	    th:data-id="${task.id}"
+	    th:classappend="'task-' + ${task.status}">
 
-      <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
+	  <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
 
-      <form th:action="@{'/tasks/' + ${task.id} + '/next'}" method="post" class="status-form">
-		<button type="submit" class="tag" th:classappend="'tag-' + ${task.status}"
-		        th:attr="data-celebrate=${task.status.name() == 'DOING'},
-		                 data-begin=${task.status.name() == 'TODO'}">
-          <span th:switch="${task.status.name()}">
-            <span th:case="'TODO'">未実施</span>
-            <span th:case="'DOING'">進行中</span>
-          </span>
-        </button>
-      </form>
+	  <form th:action="@{'/tasks/' + ${task.id} + '/next'}" method="post" class="status-form">
+	    <button type="submit" class="tag" th:classappend="'tag-' + ${task.status}"
+	            th:attr="data-celebrate=${task.status.name() == 'DOING'},
+	                     data-begin=${task.status.name() == 'TODO'}">
+	      <span th:switch="${task.status.name()}">
+	        <span th:case="'TODO'">未実施</span>
+	        <span th:case="'DOING'">進行中</span>
+	      </span>
+	    </button>
+	  </form>
 
-      <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
+	  <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
 
-	
-	  
-      <!-- 締切。今日より前なら「超過」として色を変える -->
-      <span class="due"
-            th:classappend="${task.dueDate != null and task.dueDate.isBefore(today) ? 'due-over' : ''}"
-            th:text="${task.dueDate == null ? ''
-                      : (task.dueDate.isBefore(today)
-                         ? '超過 ' + #temporals.format(task.dueDate, 'M/d')
-                         : '〆 '   + #temporals.format(task.dueDate, 'M/d'))}">〆 9/12</span>
+	  <!-- 完了のヒントの開閉。
+	       チェックボックスは状態を持つだけで、画面には出さない -->
+	  <input class="detail-check" type="checkbox" th:id="'detail-' + ${task.id}">
+	  <label class="detail-toggle" th:for="'detail-' + ${task.id}" title="完了のヒント">▾</label>
 
-      <span class="badge"
-            th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
-            th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
+	  <!-- 締切。今日より前なら「超過」として色を変える -->
+	  <span class="due"
+	        th:classappend="${task.dueDate != null and task.dueDate.isBefore(today) ? 'due-over' : ''}"
+	        th:text="${task.dueDate == null ? ''
+	                  : (task.dueDate.isBefore(today)
+	                     ? '超過 ' + #temporals.format(task.dueDate, 'M/d')
+	                     : '〆 '   + #temporals.format(task.dueDate, 'M/d'))}">〆 9/12</span>
 
-			<!-- 編集ボタン。押すとダイアログが前に出る -->
-			<button type="button" class="btn-icon btn-edit" title="編集"
-			        th:attr="data-target='edit-' + ${task.id}">✒️</button>
+	  <span class="badge"
+	        th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
+	        th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
 
-			<!-- 編集ダイアログ。押すまでは表示されない -->
-			<dialog th:id="'edit-' + ${task.id}" class="edit-dialog">
-			  <div class="edit-page">
+	  <!-- 編集ボタン。押すとダイアログが前に出る -->
+	  <button type="button" class="btn-icon btn-edit" title="編集"
+	          th:attr="data-target='edit-' + ${task.id}">✒️</button>
 
-			    <h2 class="edit-heading">タスクを編集</h2>
+	  <!-- 編集ダイアログ。押すまでは表示されない -->
+	  <dialog th:id="'edit-' + ${task.id}" class="edit-dialog">
+	    <div class="edit-page">
 
-			    <form th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
+	      <h2 class="edit-heading">タスクを編集</h2>
 
-			      <div class="field">
-			        <!-- id は画面の中で1つだけにする必要があるので、タスクIDを付けて区別する -->
-			        <label th:for="'title-' + ${task.id}">タイトル</label>
-			        <input type="text" th:id="'title-' + ${task.id}" name="title"
-			               th:value="${task.title}" maxlength="100" required autocomplete="off">
-			      </div>
+	      <form th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
 
-			      <div class="field">
-			        <label th:for="'difficulty-' + ${task.id}">難易度</label>
-			        <select th:id="'difficulty-' + ${task.id}" name="difficulty">
-			          <option th:each="d : ${difficulties}"
-			                  th:value="${d}" th:text="${d.label}"
-			                  th:selected="${d == task.difficulty}">中</option>
-			        </select>
-			      </div>
+	        <div class="field">
+	          <!-- id は画面の中で1つだけにする必要があるので、タスクIDを付けて区別する -->
+	          <label th:for="'title-' + ${task.id}">タイトル</label>
+	          <input type="text" th:id="'title-' + ${task.id}" name="title"
+	                 th:value="${task.title}" maxlength="100" required autocomplete="off">
+	        </div>
 
-			      <div class="field">
-			        <label th:for="'due-' + ${task.id}">締切</label>
-			        <input type="date" th:id="'due-' + ${task.id}" name="dueDate"
-			               th:value="${task.dueDate}">
-			      </div>
+	        <div class="field">
+	          <label th:for="'difficulty-' + ${task.id}">難易度</label>
+	          <select th:id="'difficulty-' + ${task.id}" name="difficulty">
+	            <option th:each="d : ${difficulties}"
+	                    th:value="${d}" th:text="${d.label}"
+	                    th:selected="${d == task.difficulty}">中</option>
+	          </select>
+	        </div>
 
-			      <div class="edit-actions">
-			        <button type="button" class="btn-cancel"
-			                onclick="this.closest('dialog').close()">キャンセル</button>
-			        <button type="submit" class="btn-add">保存する</button>
-			      </div>
-			    </form>
+	        <div class="field">
+	          <label th:for="'due-' + ${task.id}">締切</label>
+	          <input type="date" th:id="'due-' + ${task.id}" name="dueDate"
+	                 th:value="${task.dueDate}">
+	        </div>
 
-			  </div>
-			</dialog>
+	        <div class="field">
+	          <label th:for="'detail-text-' + ${task.id}">完了のヒント</label>
+	          <textarea th:id="'detail-text-' + ${task.id}" name="detail"
+	                    rows="5" th:text="${task.detail}"></textarea>
+	        </div>
 
-      <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
-        <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
-      </form>
-	  <!-- AIの提案から作ったタスクだけ、やり方が入っている -->
-	          <p class="task-detail" th:if="${task.detail != null}" th:text="${task.detail}"></p>
-    </li>
-	
+	        <div class="edit-actions">
+	          <button type="button" class="btn-cancel"
+	                  onclick="this.closest('dialog').close()">キャンセル</button>
+	          <button type="submit" class="btn-add">保存する</button>
+	        </div>
+	      </form>
+
+	    </div>
+	  </dialog>
+
+	  <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
+	    <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
+	  </form>
+
+	  <!-- 開いたときに出る中身。CSS の order で、この行の最後の段に落ちる -->
+	  <div class="task-detail-body">
+	    <p class="detail-head">💡 完了のヒント</p>
+
+	    <p class="detail-text"
+	       th:if="${task.detail != null and !task.detail.isEmpty()}"
+	       th:text="${task.detail}"></p>
+
+	    <p class="detail-empty"
+	       th:if="${task.detail == null or task.detail.isEmpty()}">
+	      ヒントはまだありません。「✒️」から、手順や終わりの目安を書いておけます。
+	    </p>
+	  </div>
+	</li>
+
   </ul>
 
   <!-- ===== 完了したタスク（折りたたみ） ===== -->
@@ -168,28 +186,97 @@
     </summary>
 
     <ul class="task-list">
-      <li class="task task-DONE" th:each="task : ${doneTasks}">
+		<li class="task task-DONE" th:each="task : ${doneTasks}">
 
-        <!-- 完了済みは並べ替えないので、つまむ部分は出さない -->
-        <form th:action="@{'/tasks/' + ${task.id} + '/next'}" method="post" class="status-form">
-          <button type="submit" class="tag tag-DONE">完了</button>
-        </form>
+		  <!-- 完了済みは並べ替えないので、つまむ部分は出さない -->
+		  <form th:action="@{'/tasks/' + ${task.id} + '/next'}" method="post" class="status-form">
+		    <button type="submit" class="tag tag-DONE">完了</button>
+		  </form>
 
-        <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
+		  <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
 
-	
-		
-        <span class="badge"
-              th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
-              th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
+		  <!-- 終わったあとも、どう進めたかを見返せるようにしておく -->
+		  <input class="detail-check" type="checkbox" th:id="'detail-' + ${task.id}">
+		  <label class="detail-toggle" th:for="'detail-' + ${task.id}" title="完了のヒント">▾</label>
 
-        <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
-          <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
-        </form>
-      </li>
+		  <span class="badge"
+		        th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
+		        th:text="${task.difficulty != null ? task.difficulty.label : '中'}">中</span>
+
+		  <!-- 編集ボタン。押すとダイアログが前に出る -->
+		  <button type="button" class="btn-icon btn-edit" title="編集"
+		          th:attr="data-target='edit-' + ${task.id}">✒️</button>
+
+		  <!-- 編集ダイアログ。押すまでは表示されない -->
+		  <dialog th:id="'edit-' + ${task.id}" class="edit-dialog">
+		    <div class="edit-page">
+
+		      <h2 class="edit-heading">タスクを編集</h2>
+
+		      <form th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
+
+		        <div class="field">
+		          <label th:for="'title-' + ${task.id}">タイトル</label>
+		          <input type="text" th:id="'title-' + ${task.id}" name="title"
+		                 th:value="${task.title}" maxlength="100" required autocomplete="off">
+		        </div>
+
+		        <div class="field">
+		          <label th:for="'difficulty-' + ${task.id}">難易度</label>
+		          <select th:id="'difficulty-' + ${task.id}" name="difficulty">
+		            <option th:each="d : ${difficulties}"
+		                    th:value="${d}" th:text="${d.label}"
+		                    th:selected="${d == task.difficulty}">中</option>
+		          </select>
+		        </div>
+
+		        <div class="field">
+		          <label th:for="'due-' + ${task.id}">締切</label>
+		          <input type="date" th:id="'due-' + ${task.id}" name="dueDate"
+		                 th:value="${task.dueDate}">
+		        </div>
+
+		        <div class="field">
+		          <label th:for="'detail-text-' + ${task.id}">完了のヒント</label>
+		          <textarea th:id="'detail-text-' + ${task.id}" name="detail"
+		                    rows="5" th:text="${task.detail}"></textarea>
+		        </div>
+
+		        <div class="edit-actions">
+		          <button type="button" class="btn-cancel"
+		                  onclick="this.closest('dialog').close()">キャンセル</button>
+		          <button type="submit" class="btn-add">保存する</button>
+		        </div>
+		      </form>
+
+		    </div>
+		  </dialog>
+
+		  <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
+		    <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
+		  </form>
+
+		  <div class="task-detail-body">
+		    <p class="detail-head">💡 完了のヒント</p>
+
+		    <p class="detail-text"
+		       th:if="${task.detail != null and !task.detail.isEmpty()}"
+		       th:text="${task.detail}"></p>
+
+		    <p class="detail-empty"
+		       th:if="${task.detail == null or task.detail.isEmpty()}">
+		      ヒントはまだありません。「✒️」から、手順や終わりの目安を書いておけます。
+		    </p>
+		  </div>
+		</li>
     </ul>
   </details>
 
+  <!-- ログアウト。ふだん押すものではないので、右下に小さく置く -->
+  <form th:action="@{/logout}" method="post" class="logout-form">
+    <button type="submit" class="btn-logout">ログアウト</button>
+  </form>
+  
   <!-- 動作確認用。通知を今すぐ送る -->
   <form th:action="@{/notify/test}" method="post" class="test-notify">
     <button type="submit" class="btn-test">通知をテスト送信</button>

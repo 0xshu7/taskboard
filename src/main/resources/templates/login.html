@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ログイン｜Task Board</title>
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+
+<div class="container home">
+
+  <h1 class="app-title">Task Board</h1>
+
+  <!--
+    Google の同意画面へ送るURL。
+    /oauth2/authorization/{登録名} という形は Spring Security が用意している。
+    {登録名} は application.yml の registration の下に書いた名前（google）と同じ。
+    画面を移るだけなので、フォームではなくリンクでよい。
+  -->
+  <a class="btn-google" th:href="@{/oauth2/authorization/google}">Googleではじめる</a>
+
+</div>
+
+</body>
+</html>
