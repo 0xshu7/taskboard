@@ -9,6 +9,8 @@
   <link rel="icon" type="image/png" sizes="32x32" th:href="@{/icon-32.png}">
   <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
   <link rel="manifest" th:href="@{/site.webmanifest}">
+  <meta name="_csrf" th:content="${_csrf.token}">
+  <meta name="_csrf_header" th:content="${_csrf.headerName}">
 </head>
 <body th:attr="data-volume=${volume}">
 
@@ -24,7 +26,6 @@
   
   <!-- ===== 画面の行き来 ===== -->
   <nav class="tabs">
-  
     <a class="tab" th:href="@{/}">スタート</a>
     <a class="tab-gear" th:href="@{/settings}" title="設定">⚙</a>
   </nav>
@@ -275,11 +276,6 @@
   <!-- ログアウト。ふだん押すものではないので、右下に小さく置く -->
   <form th:action="@{/logout}" method="post" class="logout-form">
     <button type="submit" class="btn-logout">ログアウト</button>
-  </form>
-  
-  <!-- 動作確認用。通知を今すぐ送る -->
-  <form th:action="@{/notify/test}" method="post" class="test-notify">
-    <button type="submit" class="btn-test">通知をテスト送信</button>
   </form>
 
 </div>

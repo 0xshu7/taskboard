@@ -82,8 +82,6 @@ public class ProposalController {
 	public String start() {
 		ProposalSet set = proposalService.start();
 
-		proposalService.prepareInBackground(userService.currentId());
-
 		return "redirect:/proposals/" + set.getId();
 	}
 
@@ -143,8 +141,6 @@ public class ProposalController {
 	@PostMapping("/proposals/{setId}/retopic")
 	public String retopic(@PathVariable Long setId) {
 		ProposalSet next = proposalService.retopic(setId);
-
-		proposalService.prepareInBackground(userService.currentId());
 
 		return "redirect:/proposals/" + next.getId();
 	}

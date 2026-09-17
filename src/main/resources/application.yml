@@ -12,18 +12,7 @@ spring:
           google:
             client-id: ${GOOGLE_CLIENT_ID:}
             client-secret: ${GOOGLE_CLIENT_SECRET:}
-            scope: openid, email, profile
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_APP_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
+            scope: openid
 
 ai:
   mock: true
@@ -32,9 +21,9 @@ ai:
   timeout-seconds: 10
   max-attempts: 3
 
-mail:
-  mock: true
-
 app:
   base-url: http://localhost:8080
-  notify-to: ${NOTIFY_TO:}    # 認証を作ったら users.email から取る
+
+h2:
+  console:
+    enabled: false

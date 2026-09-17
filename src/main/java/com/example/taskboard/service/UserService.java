@@ -6,7 +6,7 @@ package com.example.taskboard.service;
 // Transactional … メソッドの途中で失敗したら、その中の保存をすべて取り消す
 //
 // 以下は Spring Security の部品。
-// Authentication       … いまログインしている人の情報をまとめたもの
+// Authentication        … いまログインしている人の情報をまとめたもの
 // SecurityContextHolder … その情報を取り出す窓口。どこからでも呼べる
 // OAuth2User            … Googleログインで受け取った利用者情報
 //
@@ -34,11 +34,14 @@ import com.example.taskboard.repository.UserRepository;
  * ログインの方式を変えても、直すのはここだけになる。
  *
  * 初めてログインした人は、その場で登録する。
- * 登録画面を別に作らないのは、Googleが名前とメールを渡してくれるため。
- * 利用者から見ると「ログインしたらもう使える」状態になる。
+ * 登録画面を別に作らないのは、入力してもらうものが何も無いため。
  *
- * 見分ける鍵には sub を使う。
- * Googleが1アカウントに1つ割り当てる文字列で、変わらない。
+ * Googleから受け取るのは sub という識別子だけ。
+ * application.yml で scope を openid だけにしているので、
+ * メールアドレスも名前も送られてこない。
+ * 表示名は既定の「あなた」で作り、本人が設定画面で変える。
+ *
+ * sub を鍵にしているのは、それが変わらないため。
  * メールアドレスは本人が変更できるので、鍵にすると別人として扱われてしまう。
  *
  * 設定の保存もここで受ける。
@@ -50,11 +53,8 @@ public class UserService {
 
 	// ===== フィールド =====
 
-	/** 表示名が取れなかったときに使う名前 */
+	/** 登録したときの表示名。設定画面で変えられる */
 	private static final String DEFAULT_NAME = "あなた";
-
-	/** display_name 列の上限。ここを超えると保存時に失敗する */
-	private static final int NAME_MAX = 50;
 
 	/** 利用者の出し入れ */
 	private final UserRepository userRepository;
@@ -83,11 +83,10 @@ public class UserService {
 	 */
 	@Transactional
 	public User current() {
-		OAuth2User principal = currentPrincipal();
-		String googleSub = principal.getAttribute("sub");
+		String googleSub = currentPrincipal().getAttribute("sub");
 
 		return userRepository.findByGoogleSub(googleSub)
-				.orElseGet(() -> register(principal));
+				.orElseGet(() -> register(googleSub));
 	}
 
 	/**
@@ -154,34 +153,13 @@ public class UserService {
 	/**
 	 * 初めてログインした人を登録する。
 	 *
-	 * Googleから受け取れるもののうち、使うのは3つ。
-	 *   sub   … その人を表す固定のID
-	 *   email … メールアドレス
-	 *   name  … 表示名
+	 * 受け取っているのは sub だけなので、それ以外は既定値で作る。
+	 * 表示名は「あなた」。本人が設定画面で変えられる。
 	 *
-	 * name は取れないことがある。取れなければ「あなた」にしておく。
-	 * 名前が無いというだけで登録に失敗させると、そこで使えなくなってしまう。
-	 *
-	 * 長さも切りつめる。display_name 列は50文字までなので、
-	 * それより長い名前をそのまま保存しようとすると失敗する。
-	 *
-	 * @param principal Googleから受け取った利用者情報
+	 * @param googleSub Google が発行した識別子
 	 * @return 登録した利用者
 	 */
-	private User register(OAuth2User principal) {
-		String googleSub = principal.getAttribute("sub");
-		String email = principal.getAttribute("email");
-		String name = principal.getAttribute("name");
-
-		if (name == null || name.isBlank()) {
-			name = DEFAULT_NAME;
-		}
-		if (name.length() > NAME_MAX) {
-			name = name.substring(0, NAME_MAX);
-		}
-
-		// 引数はすべて String なので、順番を間違えてもコンパイルは通る。
-		// 作るのはここ1か所だけにしてある
-		return userRepository.save(new User(googleSub, email, name));
+	private User register(String googleSub) {
+		return userRepository.save(new User(googleSub, DEFAULT_NAME));
 	}
 }

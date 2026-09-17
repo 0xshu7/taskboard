@@ -247,20 +247,6 @@ body {
 }
 .btn-icon:hover { color: var(--pink); }
 
-/* 動作確認用。目立たせない */
-.test-notify { margin-top: 20px; text-align: center; }
-
-.btn-test {
-  padding: 6px 16px;
-  border: 2px dashed var(--muted);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
 
 /* ==========================================================================
    5. 入力欄（共通）

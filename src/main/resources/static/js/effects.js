@@ -145,8 +145,12 @@ function showAsDone(form, button) {
  *
  * そのまま送ると、音が鳴り始める前に画面が切り替わって聞こえない。
  * waitMs だけ待ってから送ることで、音が聞こえるようにする。
+ *
+ * waitingLabel を渡すと、送ったあとボタンの文字をそれに変えて押せなくする。
+ * AIの応答に3〜5秒かかるものだけに付ける。
+ * 何も起きないように見える時間があると、人はもう一度押す。
  */
-function playThenSubmit(form, soundName, waitMs) {
+function playThenSubmit(form, soundName, waitMs, waitingLabel) {
 	form.addEventListener("submit", function (event) {
 		// すでに一度処理したものは、そのまま通す（無限に止まらないように）
 		if (form.dataset.submitting === "true") {
@@ -158,6 +162,15 @@ function playThenSubmit(form, soundName, waitMs) {
 
 		playSound(soundName);
 
+		// 待たせるものだけ、ボタンの見た目を変える
+		if (waitingLabel) {
+			const button = form.querySelector("button");
+			if (button) {
+				button.disabled = true;          // 二重に押されないように
+				button.textContent = waitingLabel;
+			}
+		}
+
 		setTimeout(function () {
 			form.submit();
 		}, waitMs);
@@ -167,21 +180,24 @@ function playThenSubmit(form, soundName, waitMs) {
 document.addEventListener("DOMContentLoaded", function () {
 
 	// --- スタートボタン ---
+	// 押してからAIが3案を返すまで3〜5秒かかる。その間ボタンで知らせる
 	const startForm = document.querySelector(".start-form");
 	if (startForm) {
-		playThenSubmit(startForm, "start", 250);
+		playThenSubmit(startForm, "start", 250, "考えています…");
 	}
 
 	// --- 3択の「これにする」 ---
-	// スタートと同じ音にする。「決めて動き出す」ときの音を揃えたいので
+	// スタートと同じ音にする。「決めて動き出す」ときの音を揃えたいので。
+	// こちらはAIを呼ばないのですぐ切り替わる。文字は変えない
 	document.querySelectorAll(".choose-form").forEach(function (form) {
 		playThenSubmit(form, "start", 250);
 	});
 
 	// --- 「別の話題にする」 ---
+	// ここも作り直すので待つ
 	const retopicForm = document.querySelector(".retopic-form");
 	if (retopicForm) {
-		playThenSubmit(retopicForm, "retopic", 250);
+		playThenSubmit(retopicForm, "retopic", 250, "考えています…");
 	}
 
 	// --- 状態のボタン ---

@@ -20,6 +20,9 @@ import org.springframework.security.web.SecurityFilterChain;
  * Googleアカウントでログインした人だけがアプリを使える。
  * 誰が使っているかが決まらないと、タスクを誰のものとして保存するかも決まらない。
  *
+ * Googleに要求しているのは openid だけなので、受け取るのは識別子（sub）1つ。
+ * メールアドレスも名前も受け取らない。
+ *
  * ログイン画面は自前で用意している（templates/login.html）。
  * 認証先が Google 1つだけの場合、Spring Security は
  * 「選ばせる画面に意味がない」と判断して画面を作らず、
@@ -31,18 +34,13 @@ import org.springframework.security.web.SecurityFilterChain;
  *   /login       … ログイン画面そのもの。ここを閉じるとログインできない
  *   /error       … 失敗したときの表示。閉じると原因が見えなくなる
  *
- * 残っている課題が2つある。
+ * 残っている課題が1つある。
  *
- * 1. CSRF対策を外したままにしている。
- *    CSRF は、別のサイトに仕込まれた仕掛けから、
- *    利用者のふりをして操作を送られる攻撃のこと。
- *    有効にすると送信のたびに合言葉（トークン）が要る。
- *    Thymeleaf の th:action を使ったフォームには自動で入るが、
- *    JavaScript の fetch で送っている削除と並べ替えには自分で付ける必要がある。
- *    公開する前に必ず戻す。
- *
- * 2. H2コンソールのために、画面を枠の中に埋め込むことを許している。
- *    H2コンソールを使わなくなれば、この行も要らなくなる。
+ * H2コンソール（/h2）を、ログインなしで開けるようにしている。
+ * 開発中に自分でデータベースを見るための入口で、
+ * application-dev.yml でしか有効にしていないため、
+ * 公開するときは入口ごと存在しなくなる。
+ * ただし開発中は、同じ端末を使える人なら誰でも開ける状態になっている。
  */
 
 // ===== アノテーション =====
@@ -82,6 +80,13 @@ public class SecurityConfig {
 	 * ログインが要る画面なので Google へ送られ、何も聞かれずに戻ってきてしまう。
 	 * そのため、ログインの要らない /login へ戻している。
 	 *
+	 * CSRF は有効にしている。
+	 * 別のサイトに仕込まれた仕掛けから、利用者のふりをして操作を送られる攻撃を防ぐ。
+	 * 送信のたびに合言葉（トークン）が要るようになる。
+	 * th:action を使ったフォームには Thymeleaf が自動で入れてくれるが、
+	 * fetch で送っている削除だけは、自分でヘッダーに載せている（delete.js）。
+	 * H2コンソールは Spring の作りではないので合言葉を付けられない。そこだけ除外する。
+	 *
 	 * throws Exception が付いているのは、組み立ての途中で
 	 * 失敗する可能性があると宣言されているため。
 	 * 起動時に1回動くだけなので、失敗すればアプリが起動しない。
@@ -104,15 +109,22 @@ public class SecurityConfig {
 				// 上のどれにも当てはまらないものは、ログインした人だけ
 				.anyRequest().authenticated())
 
-		.oauth2Login(login -> login
-				.loginPage("/login")
-				.defaultSuccessUrl("/", true))
+			.oauth2Login(login -> login
+					.loginPage("/login")
+					.defaultSuccessUrl("/", true))
 
-		.logout(logout -> logout
-				.logoutSuccessUrl("/login?logout"))
+			.logout(logout -> logout
+					.logoutSuccessUrl("/login?logout"))
 
-			.csrf(csrf -> csrf.disable())
-			.headers(headers -> headers.frameOptions(frame -> frame.disable()));
+			// H2コンソールだけ CSRF の確認から外す。
+			// Spring の作りではないので、合言葉を付ける手段がない
+			.csrf(csrf -> csrf
+					.ignoringRequestMatchers("/h2/**"))
+
+			// H2コンソールは画面を枠の中に埋め込む作りなので、禁止したままだと表示できない。
+			// disable() にすると、どのサイトからでもこのアプリを枠に埋め込めてしまう。
+			// sameOrigin なら「同じアプリの中からだけ」許すので、H2は動き、外からは埋め込めない
+			.headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
 
 		return http.build();
 	}

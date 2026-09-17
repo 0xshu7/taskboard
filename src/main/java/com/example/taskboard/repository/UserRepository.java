@@ -37,30 +37,6 @@ import com.example.taskboard.domain.User;
 public interface UserRepository extends JpaRepository<User, Long> {
 
 	/**
-	 * メールアドレスで利用者を探す。
-	 *
-	 * メソッド名がそのまま検索条件になる。
-	 * findBy のあとに項目名を書くと、その列で探す SQL が組み立てられる。
-	 *
-	 *   findByEmail(String email)
-	 *   → SELECT * FROM users WHERE email = ?
-	 *
-	 * 項目名は User のフィールド名と一致させる。
-	 * 列名（email）ではなくフィールド名で書く点に注意する。
-	 * 綴りを間違えるとコンパイルは通り、起動したときに失敗する。
-	 *
-	 * 戻り値が Optional なのは、見つからないことがあるため。
-	 * null を返す代わりに「空の入れ物」を返すことで、
-	 * 受け取る側が確認を忘れにくくなる。
-	 *
-	 * ログイン機能で使う想定。現在は DevDataLoader が起動時に使っている。
-	 *
-	 * @param email 探すメールアドレス
-	 * @return 見つかった利用者。無ければ空
-	 */
-	Optional<User> findByEmail(String email);
-	
-	/**
 	 * Google のアカウント識別子で利用者を探す。
 	 *
 	 * sub は Google が1アカウントに1つ割り当てる文字列で、変わらない。

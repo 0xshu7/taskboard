@@ -92,21 +92,7 @@ public class TaskService {
 	 * @return 表示順に並んだ未完了のタスク
 	 */
 	public List<Task> findActive() {
-		return findActive(userId());
-	}
-
-	/**
-	 * 利用者を指定して、未完了のタスクを取る。
-	 *
-	 * 裏で動く処理（@Async）から呼ぶためにある。
-	 * 別の流れで動いているあいだは「いまログインしている人」が分からないので、
-	 * 呼ぶ側が受け取っておいたIDを渡す。
-	 *
-	 * @param userId 利用者のID
-	 * @return 表示順に並んだ未完了のタスク
-	 */
-	public List<Task> findActive(Long userId) {
-		return taskRepository.findByUserIdAndStatusNotOrderBySortOrderAsc(userId, TaskStatus.DONE);
+		return taskRepository.findByUserIdAndStatusNotOrderBySortOrderAsc(userId(), TaskStatus.DONE);
 	}
 
 	/**

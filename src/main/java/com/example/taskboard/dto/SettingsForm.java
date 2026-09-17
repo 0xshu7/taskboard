@@ -55,9 +55,6 @@ public class SettingsForm {
 	 */
 	private String notifyTime;
 
-	/** 通知先のメールアドレス。空なら登録アドレスへ送る */
-	private String notifyEmail;
-
 	/** 効果音の音量。0〜100 */
 	private Integer soundVolume;
 
@@ -86,8 +83,6 @@ public class SettingsForm {
 		// 時刻が未設定なら空文字にする。画面の入力欄が空のまま表示される。
 		form.setNotifyTime(user.getNotifyTime() == null ? "" : user.getNotifyTime().toString());
 
-		form.setNotifyEmail(user.getNotifyEmail());
-
 		// 音量はあとから足した列なので、それ以前の行では null になる。
 		// そのままでは画面のつまみが動かないため、既定値の50を入れる。
 		form.setSoundVolume(user.getSoundVolume() == null ? 50 : user.getSoundVolume());
@@ -107,7 +102,6 @@ public class SettingsForm {
 		user.setDisplayName(displayName);
 		user.setNotifyEnabled(notifyEnabled);
 		user.setNotifyTime(toTime(notifyTime));
-		user.setNotifyEmail(notifyEmail);
 		user.setSoundVolume(soundVolume);
 	}
 
@@ -163,16 +157,6 @@ public class SettingsForm {
 	/** 通知する時刻を入れる。文字のまま受ける */
 	public void setNotifyTime(String notifyTime) {
 		this.notifyTime = notifyTime;
-	}
-
-	/** 通知先のメールアドレスを返す */
-	public String getNotifyEmail() {
-		return notifyEmail;
-	}
-
-	/** 通知先のメールアドレスを入れる */
-	public void setNotifyEmail(String notifyEmail) {
-		this.notifyEmail = notifyEmail;
 	}
 
 	/** 効果音の音量を返す */

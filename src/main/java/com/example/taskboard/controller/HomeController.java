@@ -7,7 +7,6 @@ package com.example.taskboard.controller;
 // GetMapping … そのURLを開いたときに動くメソッドの印
 //
 // 以下はこのアプリの部品。
-// ProposalService … スタートから3案、選ぶまでの処理
 // TaskService     … タスクの処理。残り件数を出すために使う
 // UserService     … 利用者と設定。効果音の音量を画面へ渡すために使う
 
@@ -89,9 +88,6 @@ public class HomeController {
 
 		// 効果音の音量。画面の body に渡し、JavaScript がそこから読む
 		model.addAttribute("volume", userService.current().getSoundVolume());
-
-		// 裏で3案を作り始める。ここでは待たない
-		proposalService.prepareInBackground(userService.currentId());
 
 		return "home";
 	}

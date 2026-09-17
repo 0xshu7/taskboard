@@ -10,7 +10,6 @@ package com.example.taskboard.domain;
  * 1. 3案を作った直後            → OPEN
  * 2. カードが選ばれたとき        → CHOSEN（choose）
  * 3. 別の話題にするが押されたとき → RETOPIC（retopic）
- * 4. 期限を過ぎたセットを見つけたとき → EXPIRED（start の中で古いセットを片づける）
  *
  * OPEN は「まだ使える1セット」という意味を持つ。
  * スタート画面を開いた時点で3案を裏で作っておき（事前生成）、
@@ -37,7 +36,4 @@ public enum ProposalStatus {
 
 	/** 「別の話題にする」が押された。このセットは使われずに終わる */
 	RETOPIC,
-
-	/** 時間切れ。作られてから一定時間が過ぎ、使われないまま破棄された */
-	EXPIRED
 }

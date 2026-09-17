@@ -9,16 +9,14 @@ package com.example.taskboard.controller;
 // Controller     … HTMLを返すクラスです、という印
 // Model          … 画面へ値を渡すための入れ物
 // GetMapping     … そのURLを開いたときに動くメソッドの印
-// PathVariable   … URLの一部（/tasks/5/edit の 5）を受け取る
+// PathVariable   … URLの一部（/tasks/5/update の 5）を受け取る
 // PostMapping    … そのURLへ送信されたときに動くメソッドの印
 // RequestParam   … 入力欄の値を受け取る
 //
 // 以下はこのアプリの部品。
-// Difficulty          … 難易度
-// NotificationService … 締切の通知
-// RecordService       … 実績の集計
-// TaskService         … タスクの処理
-// UserService         … 利用者と設定
+// Difficulty  … 難易度
+// TaskService … タスクの処理
+// UserService … 利用者と設定
 
 import java.time.LocalDate;
 import java.util.List;
@@ -32,24 +30,22 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import com.example.taskboard.domain.Difficulty;
-import com.example.taskboard.service.NotificationService;
 import com.example.taskboard.service.TaskService;
 import com.example.taskboard.service.UserService;
 
 /**
- * タスク一覧と実績画面を受け持つ。
+ * タスク一覧を受け持つ。
  *
  * 扱うURLは2種類。
- * 表示（GET）  … /tasks、/record
- * 操作（POST） … 追加・更新・状態変更・並べ替え・削除・通知テスト
+ * 表示（GET）  … /tasks
+ * 操作（POST） … 追加・更新・状態変更・並べ替え・削除
  *
  * 操作のあとは必ず redirect: で表示のURLへ移す。
  * そのまま画面を返すと、ブラウザで再読み込みしたときに
  * 同じ操作がもう一度送られ、タスクが二重にできる。
  *
- * 実績画面も、専用のコントローラを作らずここに置いている。
- * 扱うのはタスクの集計なので、置き場所としては同じ系統になる。
- * クラスを増やすほど、どこに何があるかを覚える負担が増える。
+ * 判断や計算はここには書かない。すべて TaskService に任せている。
+ * このクラスがしているのは、URLと処理を結びつけ、結果の行き先を決めることだけ。
  */
 
 // ===== アノテーション =====
@@ -65,12 +61,8 @@ public class TaskController {
 	/** タスクの処理 */
 	private final TaskService taskService;
 
-	/** 締切の通知。動作確認用のボタンから使う */
-	private final NotificationService notificationService;
-
 	/** 利用者と設定。効果音の音量を画面へ渡すために使う */
 	private final UserService userService;
-
 
 	// ===== コンストラクタ =====
 
@@ -80,12 +72,9 @@ public class TaskController {
 	 * ここで受け取ったものを使うだけで、自分では new しない。
 	 * コンストラクタが1つだけなら、Spring が自動で値を渡す。
 	 */
-	public TaskController(TaskService taskService, NotificationService notificationService,
-			UserService userService) {
+	public TaskController(TaskService taskService, UserService userService) {
 		this.taskService = taskService;
-		this.notificationService = notificationService;
 		this.userService = userService;
-		
 	}
 
 	// ===== メソッド（表示） =====
@@ -121,7 +110,6 @@ public class TaskController {
 		return "tasks";
 	}
 
-
 	// ===== メソッド（操作） =====
 
 	/**
@@ -131,7 +119,7 @@ public class TaskController {
 	 * 難易度を選ばずに送ると null が届き、service 側で「中」になる。
 	 * 必須にすると、追加のたびに判断が1つ増える。
 	 *
-	 * @DateTimeFormat は、画面から来た "2026-09-15" という文字を
+	 * @DateTimeFormat は、画面から来た "2026-09-17" という文字を
 	 * LocalDate に変換するための指定。形式を書かないと変換できずに失敗する。
 	 *
 	 * @param title      タスクの内容
@@ -156,17 +144,21 @@ public class TaskController {
 	 * @PathVariable は URL の一部を受け取る。
 	 * /tasks/5/update なら、{id} の部分にあたる 5 が入る。
 	 *
+	 * detail（完了のヒント）は空欄で保存されることがあるので required = false にする。
+	 *
 	 * @param id         タスクのID
 	 * @param title      新しい内容
 	 * @param difficulty 新しい難易度
 	 * @param dueDate    新しい締切
+	 * @param detail     新しい完了のヒント
 	 * @return タスク一覧へ戻る
 	 */
 	@PostMapping("/tasks/{id}/update")
 	public String update(@PathVariable Long id,
 			@RequestParam String title,
 			@RequestParam Difficulty difficulty,
-			@RequestParam(required = false) LocalDate dueDate,
+			@RequestParam(required = false)
+			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate,
 			@RequestParam(required = false) String detail) {
 
 		taskService.update(id, title, difficulty, dueDate, detail);
@@ -212,22 +204,6 @@ public class TaskController {
 	@PostMapping("/tasks/{id}/delete")
 	public String delete(@PathVariable Long id) {
 		taskService.delete(id);
-		return "redirect:/tasks";
-	}
-
-	/**
-	 * 通知を今すぐ送る。動作確認用。
-	 *
-	 * 設定の ON/OFF と時刻は見ずに、必ず処理を走らせる。
-	 * 文面と送信の確認を、時刻を待たずに行えるようにするため。
-	 *
-	 * 公開するときは、この入口を消すか、管理者だけに限定する必要がある。
-	 *
-	 * @return タスク一覧へ戻る
-	 */
-	@PostMapping("/notify/test")
-	public String notifyTest() {
-		notificationService.sendNow();
 		return "redirect:/tasks";
 	}
 }
