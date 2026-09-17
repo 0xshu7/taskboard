@@ -1,93 +1,136 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title>設定</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>設定｜Task Board</title>
+
+<!-- CSRF の合言葉。JavaScript が fetch で送るときに、ここから読んでヘッダーに載せる -->
+<meta name="_csrf" th:content="${_csrf.token}">
+<meta name="_csrf_header" th:content="${_csrf.headerName}">
+
 <link rel="stylesheet" th:href="@{/css/style.css}">
 <link rel="icon" th:href="@{/favicon.ico}" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" th:href="@{/icon-32.png}">
 <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
 <link rel="manifest" th:href="@{/site.webmanifest}">
 </head>
-<body th:attr="data-volume=${volume}">
+
+<!--
+	data-volume    … 効果音の音量。このページの下の方の script が読む
+	data-vapid-key … 通知の公開鍵。push.js が読む
+-->
+<body th:attr="data-volume=${volume}, data-vapid-key=${vapidKey}">
+
 	<div class="container">
 
-		<h1>設定</h1>
+		<header class="header">
+			<h1 class="app-title"><a th:href="@{/}">Task Board</a></h1>
+		</header>
 
-		<!-- th:object で、この form が SettingsForm を編集していることを示す -->
-		<form th:action="@{/settings}" th:object="${form}" method="post">
+		<!-- ===== 画面の行き来 =====
+		     3つの画面すべてに同じものを置く。
+		     いま見ている画面だけ色を変えて、どこにいるか分かるようにする -->
+		<nav class="tabs">
+			<a class="tab" th:href="@{/tasks}">リストへ戻る</a>
+		</nav>
 
-			<!-- ===== 基本 ===== -->
-			<h2 class="section">基本</h2>
+		<!-- ===== 通知 ===== -->
+		<!--
+			「保存する」ボタンは無い。
+			スライドを動かした時点でブラウザに許可を求め、
+			届け先の登録と削除をその場で済ませる
+		-->
+		<h2 class="section">通知</h2>
 
-			<!-- ===== 通知 ===== -->
-			<h2 class="section">通知</h2>
+		<div class="field">
+			<div class="switch-row">
+				<span class="switch-label">締切が近いタスクを通知する</span>
 
-			<div class="field">
-				<label>
-					<!-- th:field を使うと、チェックを外したときの処理も自動で入る -->
-					<input type="checkbox" th:field="*{notifyEnabled}">
-					通知メールを受け取る
+				<!--
+					ラベルでチェックボックスを包むと、どこを押しても切り替わる。
+					チェックボックス自体は透明にして隠し、右の span を見た目として使う。
+					id は push.js が見ているので、この名前から変えない
+				-->
+				<label class="switch">
+					<input type="checkbox" id="notify-enabled" th:checked="${pushEnabled}">
+					<span class="switch-track"></span>
 				</label>
 			</div>
 
-			<div class="field">
-				<label for="notifyTime">通知する時刻</label>
-				<!-- step="3600" で「時」だけ選ぶ形になる -->
-				<input type="time" th:field="*{notifyTime}" step="3600">
+			<p class="note">
+				毎朝8時に、締切が今日か明日のタスクを知らせます。<br>
+				ブラウザの通知を使うので、メールアドレスは要りません。
+			</p>
+
+			<div class="test-notify">
+				<button type="button" class="btn-test" id="push-test">通知を試す</button>
 			</div>
+		</div>
 
-			<div class="field">
-				<label for="notifyEmail">通知先メールアドレス</label>
-				<input type="email" th:field="*{notifyEmail}"
-					placeholder="空なら登録アドレスに送ります">
+		<!-- ===== 音 ===== -->
+		<h2 class="section">音</h2>
+
+		<div class="field">
+			<label for="volume-range">効果音の音量</label>
+			<div class="volume-row">
+				<!-- form の中ではないので th:field は使えない。
+				     いまの値は th:value で入れ、保存は下の script が裏で行う -->
+				<input type="range" id="volume-range" min="0" max="100" step="10"
+					th:value="${volume}">
+				<span id="volume-value" th:text="${volume}">50</span>
 			</div>
+			<p class="note">0 にすると鳴りません。動かすと今の音量で試せます。</p>
+		</div>
 
-			<!-- ===== 音 ===== -->
-			<h2 class="section">音</h2>
-
-			<div class="field">
-				<label for="soundVolume">効果音の音量</label>
-				<div class="volume-row">
-					<input type="range" th:field="*{soundVolume}"
-						min="0" max="100" step="10"
-						oninput="document.getElementById('volume-value').textContent = this.value;">
-					<span id="volume-value" th:text="*{soundVolume}">50</span>
-				</div>
-				<p class="note">0 にすると鳴りません。動かすと今の音量で試せます。</p>
-			</div>
-			
-			
-			<!-- 新しい項目は、この下に <h2 class="section"> から始まる固まりを足す -->
-
-						<button type="submit" class="btn-add">保存する</button>
+		<!-- ===== ログアウト ===== -->
+		<!--
+			<a> ではなく <form> の POST にしている。
+			リンクにすると、他のサイトに <img src=".../logout"> を仕込むだけで
+			勝手にログアウトさせられるため
+		-->
+		<form th:action="@{/logout}" method="post" class="logout-form">
+			<button type="submit" class="btn-logout">ログアウト</button>
 		</form>
 
-		<hr class="sep">
-
-		<h2 class="section">本人メモ</h2>
-		<p class="note">AIが提案するときに読んでいる、あなたについての文章です。</p>
-		<button type="button" class="btn-sub" disabled>本人メモを作り直す（準備中）</button>
-
-		<p class="links">
-			<a th:href="@{/}">スタート画面へ</a>
-			<a th:href="@{/tasks}">タスク一覧へ</a>
-		</p>
-
 	</div>
-	
+
+	<script th:src="@{/js/push.js}"></script>
 	<script>
-		// つまみを離したときに、その音量で鳴らしてみる
-		document.querySelector('input[type="range"]').addEventListener('change', function () {
-			const volume = Number(this.value) / 100;
-			if (volume <= 0) {
+		// 音量のつまみ。
+		// 動かしている間は数字を更新し、離したときに鳴らして、その値を保存する。
+		//
+		// postJson は push.js が用意している。
+		// CSRF の合言葉を付ける処理が入っているので、ここでは呼ぶだけでよい
+		(function () {
+			const range = document.getElementById("volume-range");
+			const label = document.getElementById("volume-value");
+
+			if (range === null) {
 				return;
 			}
-			const sound = new Audio('/sounds/complete.wav');
-			sound.volume = volume;
-			sound.play();
-		});
+
+			// input は動かしている最中、change は離したとき
+			range.addEventListener("input", function () {
+				label.textContent = range.value;
+			});
+
+			range.addEventListener("change", function () {
+
+				// 保存する。画面は切り替わらない
+				postJson("/settings/volume", { soundVolume: Number(range.value) });
+
+				// その音量で鳴らしてみる。効いたことが耳で分かる
+				const volume = Number(range.value) / 100;
+				if (volume <= 0) {
+					return;
+				}
+				const sound = new Audio("/sounds/complete.wav");
+				sound.volume = volume;
+				sound.play();
+			});
+		})();
 	</script>
-	
+
 </body>
 </html>

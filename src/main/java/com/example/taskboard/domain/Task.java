@@ -99,16 +99,12 @@ public class Task {
 	/**
 	 * 完了日時。未完了なら null。
 	 *
-	 * 実績画面の材料はほぼこの列。
-	 * 通算件数・今日の件数・週のグラフを、全部ここから数えている。
+	 * 完了リストの並び順（新しい順）に使っている。
+	 * 状態と必ずセットで動かす必要があるので、
 	 * 書き換えるのは TaskService.nextStatus の1か所だけにしてある。
 	 */
 	@Column(name = "completed_at")
 	private LocalDateTime completedAt;
-
-	/** 最後に通知した日。同じ日に2回メールを送らないための印 */
-	@Column(name = "notified_date")
-	private LocalDate notifiedDate;
 
 	/**
 	 * やり方と「終わりの線」。AIの提案から作ったタスクだけに入る。
@@ -220,16 +216,6 @@ public class Task {
 	/** 完了日時を入れる。完了以外に戻すときは null を入れる */
 	public void setCompletedAt(LocalDateTime completedAt) {
 		this.completedAt = completedAt;
-	}
-
-	/** 最後に通知した日を返す */
-	public LocalDate getNotifiedDate() {
-		return notifiedDate;
-	}
-
-	/** 最後に通知した日を入れる。NotificationService から呼ばれる */
-	public void setNotifiedDate(LocalDate notifiedDate) {
-		this.notifiedDate = notifiedDate;
 	}
 
 	/** やり方と終わりの線を返す。手入力のタスクでは null */

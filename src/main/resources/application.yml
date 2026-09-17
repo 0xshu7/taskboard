@@ -1,4 +1,7 @@
 spring:
+  h2:
+    console:
+      enabled: false
   application:
     name: taskboard
   profiles:
@@ -14,6 +17,7 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET:}
             scope: openid
 
+
 ai:
   mock: true
   model: gemini-3.6-flash
@@ -24,6 +28,7 @@ ai:
 app:
   base-url: http://localhost:8080
 
-h2:
-  console:
-    enabled: false
+push:
+  public-key: ${VAPID_PUBLIC_KEY:}
+  private-key: ${VAPID_PRIVATE_KEY:}
+  subject: mailto:noreply@example.com

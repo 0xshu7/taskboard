@@ -39,22 +39,14 @@ import com.example.taskboard.repository.UserRepository;
  * Googleから受け取るのは sub という識別子だけ。
  * application.yml で scope を openid だけにしているので、
  * メールアドレスも名前も送られてこない。
- * 表示名は既定の「あなた」で作り、本人が設定画面で変える。
  *
  * sub を鍵にしているのは、それが変わらないため。
  * メールアドレスは本人が変更できるので、鍵にすると別人として扱われてしまう。
- *
- * 設定の保存もここで受ける。
- * 画面の値を User に写す作業は SettingsForm が持っているので、
- * このクラスは「取ってきて、写して、保存する」の3行で済む。
  */
 @Service
 public class UserService {
 
 	// ===== フィールド =====
-
-	/** 登録したときの表示名。設定画面で変えられる */
-	private static final String DEFAULT_NAME = "あなた";
 
 	/** 利用者の出し入れ */
 	private final UserRepository userRepository;
@@ -86,7 +78,7 @@ public class UserService {
 		String googleSub = currentPrincipal().getAttribute("sub");
 
 		return userRepository.findByGoogleSub(googleSub)
-				.orElseGet(() -> register(googleSub));
+				.orElseGet(() -> userRepository.save(new User(googleSub)));
 	}
 
 	/**
@@ -105,10 +97,10 @@ public class UserService {
 	/**
 	 * 設定を保存する。
 	 *
-	 * 項目が増えても、このメソッドは変わらない。
-	 * 画面の値を User に写す作業は SettingsForm.apply が持っているため。
+	 * いま保存できるのは効果音の音量だけ。
+	 * 通知の入切は、届け先を登録するか消すかで決まるので、ここでは扱わない。
 	 *
-	 * 設定項目を増やすときに触るのは3か所だけ。
+	 * 設定項目を増やすときに触るのは3か所。
 	 * 1. User に列を足す
 	 * 2. SettingsForm に項目を足す（from と apply にも1行ずつ）
 	 * 3. settings.html に入力欄を足す
@@ -148,18 +140,5 @@ public class UserService {
 			throw new IllegalStateException("ログインしていません");
 		}
 		return principal;
-	}
-
-	/**
-	 * 初めてログインした人を登録する。
-	 *
-	 * 受け取っているのは sub だけなので、それ以外は既定値で作る。
-	 * 表示名は「あなた」。本人が設定画面で変えられる。
-	 *
-	 * @param googleSub Google が発行した識別子
-	 * @return 登録した利用者
-	 */
-	private User register(String googleSub) {
-		return userRepository.save(new User(googleSub, DEFAULT_NAME));
 	}
 }

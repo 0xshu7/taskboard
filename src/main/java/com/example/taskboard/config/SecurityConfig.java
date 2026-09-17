@@ -100,7 +100,7 @@ public class SecurityConfig {
 
 		http.authorizeHttpRequests(auth -> auth
 				// 画面を描くのに必要なファイル。ログイン画面もこれを読む
-				.requestMatchers("/css/**", "/js/**", "/sounds/**",
+				.requestMatchers("/css/**", "/js/**", "/sounds/**", "/sw.js",
 						"/favicon.ico", "/*.png", "/site.webmanifest").permitAll()
 				// ログイン画面と、失敗したときの表示
 				.requestMatchers("/login", "/error").permitAll()

@@ -26,8 +26,8 @@
   
   <!-- ===== 画面の行き来 ===== -->
   <nav class="tabs">
-    <a class="tab" th:href="@{/}">スタート</a>
-    <a class="tab-gear" th:href="@{/settings}" title="設定">⚙</a>
+  	<a class="tab" th:href="@{/}">スタート</a>
+  	<a class="tab-gear" th:href="@{/settings}" title="設定">⚙</a>
   </nav>
 
   <!-- ===== 操作の結果メッセージ ===== -->
@@ -272,11 +272,6 @@
 		</li>
     </ul>
   </details>
-
-  <!-- ログアウト。ふだん押すものではないので、右下に小さく置く -->
-  <form th:action="@{/logout}" method="post" class="logout-form">
-    <button type="submit" class="btn-logout">ログアウト</button>
-  </form>
 
 </div>
 

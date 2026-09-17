@@ -174,6 +174,10 @@ body {
   text-decoration: none;
 }
 
+/* いま設定画面にいるときの歯車。今は使っていないが、
+   3画面すべてに置く形に変えたときのために残しておく */
+.gear-on { color: var(--pink); }
+
 
 /* ==========================================================================
    4. ボタン（共通）
@@ -665,26 +669,6 @@ body {
 /* 完了リストの行は少し控えめに */
 .done-box .task { opacity: .75; }
 
-/* ログアウト。完了リストの右下に、控えめに置く。
-   ふだん押すものではないので、目立たせない */
-.logout-form {
-  margin-top: 14px;
-  text-align: right;
-}
-
-.btn-logout {
-  padding: 6px 16px;
-  border: 2px solid var(--muted);
-  border-radius: var(--pill);
-  background: transparent;
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-
-
 
 /* ==========================================================================
    10. お知らせの帯
@@ -943,7 +927,71 @@ body {
   min-width: 2.5em;
   text-align: right;
 }
+/* --- 入切のスライド --- */
 
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.switch-label { font-size: 14px; }
+
+/* ラベルでチェックボックスを包むと、どこを押しても切り替わる。
+   .field label の display:block を打ち消すため、ここで指定し直す */
+.switch {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 54px;
+  height: 30px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* チェックボックス本体は見せない。
+   display:none にすると押せなくなる環境があるので、透明にして重ねる */
+.switch input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+/* 溝の部分 */
+.switch-track {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border: 3px solid var(--ink);
+  border-radius: var(--pill);
+  background: #e4e4e4;
+  transition: background .2s ease;
+}
+
+/* つまみ。::before は「この要素の中に作る飾り」 */
+.switch-track::before {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .2s ease;
+}
+
+/* 入のとき。+ は「すぐ次にあるもの」を指す */
+.switch input:checked + .switch-track { background: var(--green); }
+
+.switch input:checked + .switch-track::before { transform: translateX(24px); }
+
+/* キーボードで移動してきたときに、どこにいるか分かるようにする */
+.switch input:focus-visible + .switch-track {
+  box-shadow: 0 0 0 4px rgba(240, 51, 140, .18);
+}
 .links {
   margin-top: 24px;
   display: flex;
@@ -951,6 +999,23 @@ body {
   justify-content: center;
 }
 
+/* ログアウト。完了リストの右下に、控えめに置く。
+   ふだん押すものではないので、目立たせない */
+.logout-form {
+  margin-top: 14px;
+  text-align: right;
+}
+
+.btn-logout {
+  padding: 6px 16px;
+  border: 2px solid var(--muted);
+  border-radius: var(--pill);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
 
 /* ==========================================================================
    14. 花吹雪
@@ -980,4 +1045,21 @@ body {
     animation: none;
     transition: none;
   }
+}
+
+/* 動作確認用。通知のスライドのすぐ下に、控えめに置く */
+.test-notify {
+  margin-top: 12px;
+  text-align: right;
+}
+
+.btn-test {
+  padding: 6px 16px;
+  border: 2px dashed var(--muted);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
 }

@@ -129,6 +129,55 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- ===== 通知 ===== -->
+
+		<!-- Web Push。VAPIDの署名と、本文の暗号化をやってくれる。
+		     Spring Boot が管理していないライブラリなので、version を自分で書く -->
+		<dependency>
+			<groupId>nl.martijndwars</groupId>
+			<artifactId>web-push</artifactId>
+			<version>5.1.2</version>
+			
+			<exclusions>
+				<exclusion>
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-reload4j</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		
+				<!-- 暗号の計算をする部品。web-push が内部で使っているが、
+		     鍵を作るときにこちらからも直接呼ぶので明示的に足す -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>1.78.1</version>
+		</dependency>
+		
+				<!-- web-push が署名に使うライブラリ。
+		     一緒に落ちてこないことがあるので、明示的に足す -->
+		<dependency>
+			<groupId>org.bitbucket.b_c</groupId>
+			<artifactId>jose4j</artifactId>
+			<version>0.9.6</version>
+		</dependency>
+		
+				<!-- 証明書まわりの部品。web-push が署名するときに使う。
+		     bcprov と対になっていて、バージョンを揃えないと動かない -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk18on</artifactId>
+			<version>1.78.1</version>
+		</dependency>
+		
+				<!-- web-push が返す HttpResponse は、この古いほうの HTTP ライブラリのもの。
+		     Spring Boot が管理しているのは新しい httpclient5 で、別物になっている -->
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpcore</artifactId>
+			<version>4.4.16</version>
+		</dependency>
+		
 	</dependencies>
 
 	<build>
