@@ -169,6 +169,7 @@ function playThenSubmit(form, soundName, waitMs, waitingLabel) {
 				button.disabled = true;          // 二重に押されないように
 				button.textContent = waitingLabel;
 			}
+			showWaiting(waitingLabel); 	
 		}
 
 		setTimeout(function () {
@@ -183,7 +184,7 @@ document.addEventListener("DOMContentLoaded", function () {
 	// 押してからAIが3案を返すまで3〜5秒かかる。その間ボタンで知らせる
 	const startForm = document.querySelector(".start-form");
 	if (startForm) {
-		playThenSubmit(startForm, "start", 250, "考えています…");
+		playThenSubmit(startForm, "start", 250, "AIが考えています…");
 	}
 
 	// --- 3択の「これにする」 ---
@@ -197,7 +198,7 @@ document.addEventListener("DOMContentLoaded", function () {
 	// ここも作り直すので待つ
 	const retopicForm = document.querySelector(".retopic-form");
 	if (retopicForm) {
-		playThenSubmit(retopicForm, "retopic", 250, "考えています…");
+		playThenSubmit(startForm, "start", 250, "AIが考えています…");
 	}
 
 	// --- 状態のボタン ---
@@ -232,3 +233,28 @@ document.addEventListener("DOMContentLoaded", function () {
 		}
 	});
 });
+
+// ===== 待っているあいだの表示 =====
+
+/**
+ * 画面全体を覆って「考えています」を出す。
+ *
+ * AIの応答に4〜5秒かかる。その間なにも変わらないと、
+ * 押せていないと思ってもう一度押される。
+ *
+ * ボタンの文字を変えるだけでは、画面の他の部分が止まって見える。
+ * 画面全体を覆うことで「いま待つ時間です」と分かるようにしている。
+ */
+function showWaiting(text) {
+	const overlay = document.createElement("div");
+	overlay.className = "waiting-overlay";
+
+	overlay.innerHTML =
+		'<div class="waiting-box">' +
+			'<div class="waiting-face">🤖</div>' +
+			'<p class="waiting-text">' + text + '</p>' +
+			'<div class="waiting-dots"><span></span><span></span><span></span></div>' +
+		'</div>';
+
+	document.body.appendChild(overlay);
+}

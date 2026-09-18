@@ -12,14 +12,15 @@
 </head>
 <body th:attr="data-volume=${volume}">
 
-<div class="container">
-
-  <p class="to-home"><a th:href="@{/}">← スタート</a></p>
+<div class="container proposals">
 
   <header class="header">
-    <h1 class="proposal-title">どれかひとつ、やってみよう</h1>
+    <h1 class="proposal-title">きょうはどれからはじめる？</h1>
+
+    <!-- 選んだあと何が起きるかを、押す前に書いておく。
+         「選ぶ」だけだと、その先が見えないまま押すことになる -->
+    <p class="proposal-lead">選んだタスクがリストに入って、完了のヒントもつくよ</p>
   </header>
-  
   <!-- ===== 3案 ===== -->
   <ul class="card-list">
   
@@ -29,7 +30,6 @@
       th:classappend="'card-' + ${card.position}">
 
     <div class="card-head">
-      <span class="card-no" th:text="${card.position}">1</span>
       <span class="card-category" th:text="${card.category}">生活</span>
       <span class="badge" th:classappend="'badge-' + ${card.difficulty}"
             th:text="${card.difficulty.label}">中</span>

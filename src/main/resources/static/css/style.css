@@ -103,6 +103,11 @@ body {
 }
 
 
+/* 提案画面だけ幅を絞る。
+   3案を見比べる画面なので、横に伸びると視線の移動が大きくなる */
+.container.proposals {
+  max-width: 560px;
+}
 /* ==========================================================================
    3. 見出しとタブ
    ========================================================================== */
@@ -798,6 +803,16 @@ body {
   text-decoration: none;
 }
 
+/* ログイン画面の注意書き。
+   押す前に読める位置に置くが、主役はボタンなので小さく */
+.login-note {
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: center;
+}
+
 .btn-google:active {
   transform: translate(6px, 6px);
   box-shadow: none;
@@ -813,6 +828,12 @@ body {
   text-align: center;
 }
 
+.proposal-lead {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
 .card-list { list-style: none; margin: 0 0 20px; padding: 0; }
 
 /* 提案カード1枚 */
@@ -1062,4 +1083,98 @@ body {
   font-family: inherit;
   font-size: 13px;
   cursor: pointer;
+}
+
+.choose-form {
+  margin-top: 10px;
+  text-align: right;
+}
+
+.btn-choose {
+  width: auto;          /* 100% をやめる */
+  padding: 8px 22px;
+  font-size: 14px;
+}
+
+.card {
+  padding: 14px 16px;
+}
+
+.card-title {
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+.card-reason {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.card {
+  margin-bottom: 10px;
+}
+.card-title {
+  font-size: 18px;
+}
+
+/* ===== 待っているあいだの表示 ===== */
+
+/* 画面全体を覆う。
+   position: fixed は、スクロールしても画面に貼り付いたままになる指定。
+   inset: 0 は上下左右すべて0、つまり画面いっぱいという意味 */
+.waiting-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* 中央の白い箱。カードと同じ太い黒枠とずらした影にして、
+   このアプリの一部に見えるようにする */
+.waiting-box {
+  padding: 32px 40px;
+  border: 3px solid #000;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 6px 6px 0 #000;
+  text-align: center;
+}
+
+.waiting-face {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.waiting-text {
+  margin-top: 14px;
+  font-weight: bold;
+  font-size: 15px;
+}
+
+/* 動く点を3つ。3案の3色に合わせてある */
+.waiting-dots {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.waiting-dots span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  animation: waiting-blink 1.2s infinite;
+}
+
+.waiting-dots span:nth-child(1) { background: #FF2D8A; animation-delay: 0s; }
+.waiting-dots span:nth-child(2) { background: #7ED321; animation-delay: 0.2s; }
+.waiting-dots span:nth-child(3) { background: #00C2D1; animation-delay: 0.4s; }
+
+/* 順番に濃くなる。時間差は animation-delay で作っている */
+@keyframes waiting-blink {
+  0%, 60%, 100% { opacity: 0.25; }
+  30%           { opacity: 1; }
 }
