@@ -181,17 +181,12 @@ public class NotificationService {
 	/**
 	 * 登録されている届け先すべてに送る。
 	 *
-	 * 1人が複数の端末で許可していることがあるので、全部に送る。
-	 * 1件も登録が無ければ、繰り返しが1回も回らず、何も起きない。
+	 * 締切の通知と、自動完了の通知の両方から呼ばれる。
+	 * 送る仕組みはここ1か所にまとめてある。
 	 *
-	 * 1つ失敗しても他は送りたいので、繰り返しの中で受け止めている。
-	 *
-	 * @param user  送る相手
-	 * @param title 通知の見出し
-	 * @param body  通知の本文
+	 * （以下、既存のコメントのまま）
 	 */
-	private void send(User user, String title, String body) {
-
+	public void send(User user, String title, String body) {
 		// JSONを組み立てる。sw.js がこれを受け取って画面に出す。
 		// 改行や引用符をそのまま入れると JSON として読めなくなるので、escape で直す
 		String payload = "{\"title\":\"" + escape(title) + "\",\"body\":\"" + escape(body) + "\"}";

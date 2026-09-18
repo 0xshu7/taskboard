@@ -2,22 +2,26 @@ package com.example.taskboard.domain;
 
 // ===== インポート =====
 // java.time.LocalDateTime … 日付＋時刻。登録日時に使う
+// java.util.Objects       … null でも落ちずに比べる道具。equals で使う
 //
 // 以下は JPA の部品。
-// Entity         … このクラスはテーブルに対応する、という印
-// Table          … 対応するテーブル名を指定する
-// Id             … 主キーの印
-// GeneratedValue … 番号を自動で振らせる
-// GenerationType … その振り方の種類（IDENTITY を使う）
-// Column         … 列名・空の可否・重複の可否・文字数の上限を指定する
+// Entity          … このクラスはテーブルに対応する、という印
+// Table           … 対応するテーブル名を指定する
+// Id              … 主キーの印
+// GeneratedValue  … 番号を自動で振らせる
+// GenerationType  … その振り方の種類（IDENTITY を使う）
+// Column          … 列名・空の可否・文字数の上限を指定する
+// PrePersist      … 保存される直前に動かすメソッドの印
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 /**
@@ -71,15 +75,20 @@ public class User {
 	@Column(name = "google_sub", nullable = false, unique = true, length = 64)
 	private String googleSub;
 
-	/** 登録日時。new した時点の時刻がそのまま入る */
+	/**
+	 * 登録日時。
+	 *
+	 * 初期値をここに書かず、保存の直前に入れている。
+	 * 下の onCreate を見ること。
+	 */
 	@Column(name = "created_at", nullable = false)
-	private LocalDateTime createdAt = LocalDateTime.now();
+	private LocalDateTime createdAt;
 
 	/**
-	 * 効果音の音量。0〜100。0 で無音。
+	 * 効果音の音量。0〜100。
 	 *
-	 * int ではなく Integer にしている。あとから足した列なので、
-	 * それ以前からある行では null になる。int では受け取れない。
+	 * あとから足した列なので、それ以前に登録された行では null になる。
+	 * null のときの扱いは getter で面倒を見ている。
 	 */
 	@Column(name = "sound_volume")
 	private Integer soundVolume = 50;
@@ -109,7 +118,28 @@ public class User {
 		this.googleSub = googleSub;
 	}
 
-	// ===== メソッド =====
+	// ===== メソッド（保存の前に動くもの） =====
+
+	/**
+	 * 保存される直前に、登録日時を入れる。
+	 *
+	 * @PrePersist が付いたメソッドは、JPA が insert の直前に呼ぶ。
+	 * 呼ぶのは自分ではなく、仕組みのほう。
+	 *
+	 * フィールドに = LocalDateTime.now() と書くと、
+	 * 「new した瞬間」の時刻が入る。保存の時刻とは別物になる。
+	 *
+	 * すでに値が入っているときは触らない。
+	 * データを移すときなど、こちらで時刻を指定したい場合があるため。
+	 */
+	@PrePersist
+	protected void onCreate() {
+		if (createdAt == null) {
+			createdAt = LocalDateTime.now();
+		}
+	}
+
+	// ===== メソッド（getter / setter） =====
 	// setter は「変えてよいもの」にだけ用意している。
 	// googleSub に setter が無いのは、途中で書き換えられると困る値だから。
 	// 用意しないことが、そのまま「変えるな」という意思表示になる。
@@ -124,18 +154,89 @@ public class User {
 		return googleSub;
 	}
 
-	/** 効果音の音量を返す。画面の data-volume に渡している */
-	public Integer getSoundVolume() {
-		return soundVolume;
-	}
-
-	/** 効果音の音量を入れる */
-	public void setSoundVolume(Integer soundVolume) {
-		this.soundVolume = soundVolume;
-	}
-
 	/** 登録日時を返す */
 	public LocalDateTime getCreatedAt() {
 		return createdAt;
+	}
+
+	/**
+	 * 効果音の音量を返す。
+	 *
+	 * null のときは既定値の50を返す。
+	 * この列はあとから足したので、それ以前に登録された行では null になる。
+	 *
+	 * 呼び出し側が int で受け取ると、null のままでは
+	 * NullPointerException で落ちる。
+	 * null の扱いを知っているのは User 自身なので、ここで面倒を見る。
+	 */
+	public Integer getSoundVolume() {
+		return soundVolume != null ? soundVolume : 50;
+	}
+
+	/**
+	 * 効果音の音量を入れる。0〜100 の範囲に収める。
+	 *
+	 * 範囲外の値は、近いほうの端に丸める。例外にはしない。
+	 * 音量が範囲外だからといって、設定画面全体を失敗させる意味がないため。
+	 *
+	 * 画面のつまみは 0〜100 しか動かないが、制限しているのは画面だけ。
+	 * /settings/volume は JSON を受け取るので、直接送れば何でも入る。
+	 * 守るなら、受け取る側で守る。
+	 *
+	 * Math.max(値, 0) で「0 未満なら 0」、
+	 * Math.min(その結果, 100) で「100 を超えたら 100」になる。
+	 *
+	 * @param soundVolume 音量。null や範囲外でもよい
+	 */
+	public void setSoundVolume(Integer soundVolume) {
+
+		if (soundVolume == null) {
+			this.soundVolume = 50;
+			return;
+		}
+		this.soundVolume = Math.min(Math.max(soundVolume, 0), 100);
+	}
+
+	// ===== メソッド（同じ利用者かどうかの判定） =====
+
+	/**
+	 * 同じ利用者かどうかを判定する。
+	 *
+	 * 比べるのは googleSub。id ではない。
+	 *
+	 * id は保存されるまで null なので、保存前と保存後で結果が変わってしまう。
+	 * googleSub はコンストラクタで入り、あとから変わらないので、
+	 * いつ比べても同じ答えになる。
+	 *
+	 * instanceof のあとに変数名を書くと、型の確認と代入を同時にできる。
+	 *
+	 * Objects.equals は、どちらかが null でも落ちずに比べてくれる。
+	 * googleSub.equals(...) と書くと、null のときに落ちる。
+	 */
+	@Override
+	public boolean equals(Object other) {
+
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof User user)) {
+			return false;
+		}
+		return Objects.equals(googleSub, user.googleSub);
+	}
+
+	/**
+	 * ハッシュ値を返す。
+	 *
+	 * equals で使っているものと同じ項目から作る必要がある。
+	 * 違うものを使うと、equals では同じなのにハッシュ値が違う、
+	 * という状態になり、Set や Map の中で見つからなくなる。
+	 *
+	 * equals と hashCode は必ず対で用意する。
+	 * 片方だけ書くと、その食い違いが起きる。
+	 */
+	@Override
+	public int hashCode() {
+		return Objects.hash(googleSub);
 	}
 }

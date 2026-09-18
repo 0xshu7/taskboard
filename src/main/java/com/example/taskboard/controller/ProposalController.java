@@ -30,7 +30,7 @@ import com.example.taskboard.service.UserService;
  * 1. スタートを押す           → POST /proposals
  * 2. 3案が表示される          → GET  /proposals/{setId}
  * 3a. どれかを選ぶ            → POST /proposals/{setId}/choose/{cardId} → タスク一覧へ
- * 3b. 別の話題にする          → POST /proposals/{setId}/retopic        → 新しい3案へ
+ * 3b. 別の案を見る            → POST /proposals/{setId}/retopic        → 新しい3案へ
  *
  * 判断や計算はここには書かない。すべて ProposalService に任せている。
  * このクラスがしているのは、URLと処理を結びつけ、結果の行き先を決めることだけ。
@@ -38,6 +38,9 @@ import com.example.taskboard.service.UserService;
  * 操作のあとは必ず redirect: で移動する。
  * そのまま画面を返すと、ブラウザで再読み込みしたときに
  * 同じ操作がもう一度送られ、3案が二重に作られたりタスクが重複したりする。
+ *
+ * 他人のセットかどうかの確認は ProposalService.findSet が行う。
+ * URLの番号を書き換えても、他人の3案は読めない。
  */
 @Controller
 public class ProposalController {
@@ -66,20 +69,18 @@ public class ProposalController {
 	/**
 	 * スタートボタンを押したとき。3案を出して、その画面へ移る。
 	 *
-	 * 表示のあと、次の1セットを裏で用意しておく。
-	 * 「別の話題にする」を押したときに、また数秒待たせないため。
+	 * 押されてから作るので、AIの応答を待つ4〜5秒がかかる。
+	 * その間は画面側でオーバーレイを出している（effects.js）。
 	 *
-	 * prepareInBackground はコントローラから呼ぶ必要がある。
-	 * @Async はクラスの外から呼ばれたときだけ効き、
-	 * 同じクラスの中から呼ぶとふつうのメソッド呼び出しになって、待たされてしまう。
-	 * サービスの中で呼ばずに、ここから呼んでいるのはそのため。
+	 * 以前は画面を開いた時点で裏に1セット作っておき、待ち時間を消していたが、
+	 * 1回のスタートでAIを2回呼ぶことになり、無料枠が実質半分になっていた。
+	 * 待ち時間は演出で埋められるが、枠は埋められないので、作りおきはやめた。
 	 *
-	 * 利用者のIDを引数で渡している。
-	 * 裏で動く処理は別の流れなので、そこでは「いまログインしている人」が分からない。
-	 * ここで受け取って渡しておく必要がある。
+	 * @return できたセットの画面へ移る
 	 */
 	@PostMapping("/proposals")
 	public String start() {
+
 		ProposalSet set = proposalService.start();
 
 		return "redirect:/proposals/" + set.getId();
@@ -91,6 +92,9 @@ public class ProposalController {
 	 * セットとカードを別々に渡している。
 	 * カードは ProposalSet の中に持たせず、IDでつないでいるため、
 	 * 取り出すのも別々になる。
+	 *
+	 * findSet を先に呼んでいる。
+	 * 他人のセットならそこで例外になるので、カードを読む前に止まる。
 	 *
 	 * @param setId 表示するセットのID
 	 * @param model 画面へ値を渡す入れ物
@@ -125,21 +129,25 @@ public class ProposalController {
 	 */
 	@PostMapping("/proposals/{setId}/choose/{cardId}")
 	public String choose(@PathVariable Long setId, @PathVariable Long cardId) {
+
 		proposalService.choose(setId, cardId);
 		return "redirect:/tasks";
 	}
 
 	/**
-	 * 「別の話題にする」を押したとき。新しいセットを作ってそちらへ移る。
+	 * 「別の案を見る」を押したとき。新しいセットを作ってそちらへ移る。
 	 *
-	 * ここでも、そのあとの1セットを裏で用意しておく。
-	 * 続けて押されることがあるため。
+	 * 閉じたセットも記録として残る。
+	 * 何が選ばれなかったかは、提案を良くするための手がかりになる。
+	 *
+	 * ここでもAIを1回呼ぶので、押すたびに無料枠が減る。
 	 *
 	 * @param setId 閉じるセットのID
 	 * @return 新しい3案の画面へ移る
 	 */
 	@PostMapping("/proposals/{setId}/retopic")
 	public String retopic(@PathVariable Long setId) {
+
 		ProposalSet next = proposalService.retopic(setId);
 
 		return "redirect:/proposals/" + next.getId();

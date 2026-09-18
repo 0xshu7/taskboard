@@ -11,8 +11,8 @@ package com.example.taskboard.controller;
 // ResponseBody   … 返した値を、テンプレート名ではなくそのまま応答として返す
 //
 // 以下はこのアプリの部品。
-// SettingsForm               … 設定画面とやりとりする入れ物
 // User                       … 利用者1人
+// SettingsForm               … 設定画面から届く入れ物
 // PushSubscriptionRepository … 通知の届け先の出し入れ
 // UserService                … 利用者と設定
 
@@ -89,15 +89,19 @@ public class SettingsController {
 	/**
 	 * 設定画面を出す。
 	 *
-	 * 画面へ渡すのは4つ。
-	 *   form        … 入力欄の中身（いまは音量だけ）
-	 *   volume      … 効果音の音量。つまみを動かしたときの試し鳴らしに使う
+	 * 画面へ渡すのは3つ。
+	 *   volume      … 効果音の音量。つまみの位置と、試し鳴らしに使う
 	 *   vapidKey    … 通知の公開鍵。push.js が body から読む
 	 *   pushEnabled … 通知のスライドを入にして表示するかどうか
 	 *
-	 * pushEnabled は、届け先が1件でも登録されているかで決める。
+	 * pushEnabled は、届け先が1件でもあるかで決める。
 	 * 入切を別の列に持たず、届け先の有無そのものを状態として使っている。
 	 * 同じことを2か所に持つと、必ずどこかで食い違うため。
+	 *
+	 * existsByUserId を使っている。
+	 * findByUserId で取ってきて件数を見ることもできるが、
+	 * それだと端末の数だけ行を読み込むことになる。
+	 * 知りたいのは「あるか無いか」だけなので、こちらで足りる。
 	 *
 	 * @param model 画面へ値を渡す入れ物
 	 * @return templates/settings.html
@@ -107,11 +111,9 @@ public class SettingsController {
 
 		User user = userService.current();
 
-		model.addAttribute("form", SettingsForm.from(user));
 		model.addAttribute("volume", user.getSoundVolume());
 		model.addAttribute("vapidKey", vapidPublicKey);
-		model.addAttribute("pushEnabled",
-				!subscriptionRepository.findByUserId(user.getId()).isEmpty());
+		model.addAttribute("pushEnabled", subscriptionRepository.existsByUserId(user.getId()));
 
 		return "settings";
 	}
@@ -124,6 +126,10 @@ public class SettingsController {
 	 *
 	 * @RequestBody は、届いた JSON を SettingsForm に詰めて渡す仕組み。
 	 * {"soundVolume":50} のような形で送られてくる。
+	 *
+	 * 範囲の確認はここでは行わない。
+	 * User.setSoundVolume が 0〜100 に丸めるので、
+	 * どんな値が送られても、そのまま保存されることはない。
 	 *
 	 * 画面は切り替わらないので、redirect: も返さない。
 	 *

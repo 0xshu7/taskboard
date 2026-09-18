@@ -7,14 +7,13 @@ package com.example.taskboard.controller;
 // GetMapping … そのURLを開いたときに動くメソッドの印
 //
 // 以下はこのアプリの部品。
-// TaskService     … タスクの処理。残り件数を出すために使う
-// UserService     … 利用者と設定。効果音の音量を画面へ渡すために使う
+// TaskService … タスクの処理。残り件数を出すために使う
+// UserService … 利用者と設定。効果音の音量を画面へ渡すために使う
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
-import com.example.taskboard.service.ProposalService;
 import com.example.taskboard.service.TaskService;
 import com.example.taskboard.service.UserService;
 
@@ -39,9 +38,6 @@ public class HomeController {
 	/** タスクの処理。残り件数を出すために使う */
 	private final TaskService taskService;
 
-	/** 3案の処理。裏で作りおきを始めるために使う */
-	private final ProposalService proposalService;
-
 	/** 利用者と設定。効果音の音量を画面へ渡すために使う */
 	private final UserService userService;
 
@@ -51,10 +47,8 @@ public class HomeController {
 	 * 必要な部品を受け取る。
 	 * コンストラクタが1つだけなら、Spring が自動で値を渡す。
 	 */
-	public HomeController(TaskService taskService, ProposalService proposalService,
-			UserService userService) {
+	public HomeController(TaskService taskService, UserService userService) {
 		this.taskService = taskService;
-		this.proposalService = proposalService;
 		this.userService = userService;
 	}
 
@@ -63,20 +57,21 @@ public class HomeController {
 	/**
 	 * スタート画面を表示する。
 	 *
-	 * 表示のついでに、裏で3案を作り始める。
-	 * これがこのアプリの待ち時間対策の入口になっている。
+	 * この画面では AI を呼ばない。開くだけなら何も起きない。
 	 *
-	 * AI の応答には数秒かかる。人が待てるのは3秒程度で、
-	 * 10秒を超えると離脱する。押してから待たせるのは致命的なので、
-	 * 開いた時点で作り始め、押されたときにはできている状態にする。
+	 * 以前は、開いた時点で裏に3案を1セット作っておき、
+	 * 押されたときには待ち時間ゼロで出せるようにしていた。
+	 * 速さでは優れていたが、次の2つと引き換えだった。
 	 *
-	 * prepareInBackground には @Async が付いているので、
-	 * 呼んだあと終わるのを待たずに次へ進む。画面の表示は止まらない。
-	 * 同じクラスの中から呼ぶと @Async が効かないため、
-	 * コントローラから直接呼ぶ必要がある。
+	 * 1. 1回のスタートで AI を2回呼ぶ（開いたときと、押したとき）。
+	 *    無料枠が1日20回なので、実質10回しか使えなかった。
+	 *    押さずに閉じた場合、その1回はまるごとむだになる。
+	 * 2. 裏で動かすための @Async が必要で、別の流れでは
+	 *    ログイン情報が引き継がれないため、利用者IDを引数で持ち回っていた。
 	 *
-	 * 代償として、画面を開いただけで AI を1回呼ぶ。
-	 * 押さずに閉じた場合、その1回はむだになる。
+	 * いまは押されてから作る。4〜5秒待つことになるが、
+	 * その間は画面側でオーバーレイを出している（effects.js）。
+	 * 待ち時間は演出で埋められるが、枠は埋められない。
 	 *
 	 * @param model 画面へ値を渡す入れ物
 	 * @return templates/home.html
@@ -91,12 +86,21 @@ public class HomeController {
 
 		return "home";
 	}
-	
+
 	/**
 	 * ログイン画面を表示する。
 	 *
 	 * ログインしていない人がアプリを開くと、Spring Security がここへ送る。
 	 * ログアウトしたときも、ここへ戻ってくる。
+	 *
+	 * この画面を自前で用意しているのには理由がある。
+	 * Spring Security は、ログインの方法が1つしかないとき
+	 * 「選ばせる画面に意味がない」と判断して、ログイン画面を作らず
+	 * いきなり提供元（Google）へ送る。
+	 * そのため /login が存在せず、ログアウトすると 404 になっていた。
+	 *
+	 * SecurityConfig の .loginPage("/login") と対になっている。
+	 * 片方だけ消すと、ログアウトしたときに行き先が無くなる。
 	 *
 	 * ここでは何も渡さない。まだ誰か分からない状態なので、利用者の情報は取れない。
 	 *
@@ -106,6 +110,4 @@ public class HomeController {
 	public String login() {
 		return "login";
 	}
-	
-
 }

@@ -38,7 +38,7 @@ import com.example.taskboard.service.UserService;
  *
  * 扱うURLは2種類。
  * 表示（GET）  … /tasks
- * 操作（POST） … 追加・更新・状態変更・並べ替え・削除
+ * 操作（POST） … 追加・更新・状態変更・並べ替え・削除・自動完了の予約
  *
  * 操作のあとは必ず redirect: で表示のURLへ移す。
  * そのまま画面を返すと、ブラウザで再読み込みしたときに
@@ -46,6 +46,12 @@ import com.example.taskboard.service.UserService;
  *
  * 判断や計算はここには書かない。すべて TaskService に任せている。
  * このクラスがしているのは、URLと処理を結びつけ、結果の行き先を決めることだけ。
+ *
+ * ただし「そもそも処理を始めてよいか」の確認だけはここで行う。
+ * 空のタイトルのように、service を呼ぶ意味すら無いものを手前で止めている。
+ *
+ * 他人のタスクかどうかの確認は TaskService.findById が行う。
+ * URLの番号を書き換えても、他人のものには届かない。
  */
 
 // ===== アノテーション =====
@@ -119,8 +125,15 @@ public class TaskController {
 	 * 難易度を選ばずに送ると null が届き、service 側で「中」になる。
 	 * 必須にすると、追加のたびに判断が1つ増える。
 	 *
-	 * @DateTimeFormat は、画面から来た "2026-09-17" という文字を
+	 * @DateTimeFormat は、画面から来た "2026-09-18" という文字を
 	 * LocalDate に変換するための指定。形式を書かないと変換できずに失敗する。
+	 *
+	 * タイトルが空のときは、何もせずに一覧へ戻す。
+	 * 画面の required で止めているが、開発者ツールで外せば送れてしまう。
+	 * 空白だけのタスクができると、消すまで一覧に残り続ける。
+	 *
+	 * エラーの表示は出さない。
+	 * 画面の required で防いでいるものを、わざわざ外した人に説明する必要がない。
 	 *
 	 * @param title      タスクの内容
 	 * @param difficulty 難易度。未選択なら null
@@ -134,6 +147,10 @@ public class TaskController {
 			@RequestParam(required = false)
 			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate) {
 
+		if (isBlank(title)) {
+			return "redirect:/tasks";
+		}
+
 		taskService.create(title, difficulty, dueDate);
 		return "redirect:/tasks";
 	}
@@ -145,6 +162,10 @@ public class TaskController {
 	 * /tasks/5/update なら、{id} の部分にあたる 5 が入る。
 	 *
 	 * detail（完了のヒント）は空欄で保存されることがあるので required = false にする。
+	 *
+	 * タイトルが空のときは何もしない。
+	 * ここで通してしまうと、既にあるタスクのタイトルが消える。
+	 * 追加のときより実害が大きい。
 	 *
 	 * @param id         タスクのID
 	 * @param title      新しい内容
@@ -160,6 +181,10 @@ public class TaskController {
 			@RequestParam(required = false)
 			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate,
 			@RequestParam(required = false) String detail) {
+
+		if (isBlank(title)) {
+			return "redirect:/tasks";
+		}
 
 		taskService.update(id, title, difficulty, dueDate, detail);
 		return "redirect:/tasks";
@@ -183,7 +208,7 @@ public class TaskController {
 	 * ドラッグで並べ替えた結果を保存する。
 	 *
 	 * ids には "3,1,2" のようにIDがカンマ区切りで届く。
-	 * Spring がカンマで区切って List<Long> に変換してくれるので、
+	 * Spring がカンマで区切って List&lt;Long&gt; に変換してくれるので、
 	 * 自分で分解する必要はない。
 	 *
 	 * @param ids 上から順に並んだタスクIDの一覧
@@ -205,5 +230,46 @@ public class TaskController {
 	public String delete(@PathVariable Long id) {
 		taskService.delete(id);
 		return "redirect:/tasks";
+	}
+
+	/**
+	 * 「やっちゃう」を押したとき。自動完了を予約する。
+	 *
+	 * @param id 予約するタスクのID
+	 * @return タスク一覧へ戻る
+	 */
+	@PostMapping("/tasks/{id}/auto")
+	public String startAuto(@PathVariable Long id) {
+		taskService.startAuto(id);
+		return "redirect:/tasks";
+	}
+
+	/**
+	 * 「おまかせ中」をもう一度押したとき。予約を取り消す。
+	 *
+	 * @param id 取り消すタスクのID
+	 * @return タスク一覧へ戻る
+	 */
+	@PostMapping("/tasks/{id}/auto/cancel")
+	public String cancelAuto(@PathVariable Long id) {
+		taskService.cancelAuto(id);
+		return "redirect:/tasks";
+	}
+
+	// ===== メソッド（内部で使うもの） =====
+
+	/**
+	 * 中身が無い文字かどうかを判定する。
+	 *
+	 * isBlank は「空文字か、空白だけか」を見る。
+	 * isEmpty だと、空白1文字が通ってしまう。
+	 *
+	 * null も一緒に見ているので、呼ぶ側で2つ書かずに済む。
+	 *
+	 * @param text 判定する文字
+	 * @return 中身が無ければ true
+	 */
+	private boolean isBlank(String text) {
+		return text == null || text.isBlank();
 	}
 }

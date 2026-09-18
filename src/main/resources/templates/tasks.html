@@ -162,8 +162,28 @@
 	  </form>
 
 	  <!-- 開いたときに出る中身。CSS の order で、この行の最後の段に落ちる -->
+	  <!-- 開いたときに出る中身。CSS の order で、この行の最後の段に落ちる -->
 	  <div class="task-detail-body">
-	    <p class="detail-head">💡 完了のヒント</p>
+
+	    <div class="detail-head-row">
+	      <p class="detail-head">💡 完了のヒント</p>
+
+	      <!-- 予約していないとき。押すと見積もり時間後に自動で完了になる。
+	           始めると同時に終わりを予約するので、完了ボタンの押し忘れが起きない -->
+	      <form th:if="${task.autoCompleteAt == null}"
+	            th:action="@{'/tasks/' + ${task.id} + '/auto'}"
+	            method="post" class="auto-form">
+	        <button type="submit" class="btn-auto">🚀 やっちゃう！</button>
+	      </form>
+
+	      <!-- 予約しているとき。押すと取り消す。
+	           状態は進行中のまま。押した時点で始めているはずなので、戻さない -->
+	      <form th:unless="${task.autoCompleteAt == null}"
+	            th:action="@{'/tasks/' + ${task.id} + '/auto/cancel'}"
+	            method="post" class="auto-form">
+	        <button type="submit" class="btn-auto btn-auto-on">⏳ おまかせ中</button>
+	      </form>
+	    </div>
 
 	    <p class="detail-text"
 	       th:if="${task.detail != null and !task.detail.isEmpty()}"
@@ -173,6 +193,12 @@
 	       th:if="${task.detail == null or task.detail.isEmpty()}">
 	      ヒントはまだありません。「✒️」から、手順や終わりの目安を書いておけます。
 	    </p>
+		<!-- 完了のヒントの開閉。
+		     チェックボックスは状態を持つだけで、画面には出さない。
+		     おまかせ中のタスクは開いた状態で出す。
+		     いま動いているものの中身が畳まれていると、押したことを忘れる -->
+		<input class="detail-check" type="checkbox" th:id="'detail-' + ${task.id}"
+		       th:checked="${task.autoCompleteAt != null}">
 	  </div>
 	</li>
 

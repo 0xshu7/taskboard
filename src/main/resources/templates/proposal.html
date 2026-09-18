@@ -42,7 +42,9 @@
 
 	    <span class="badge" th:classappend="'badge-' + ${card.difficulty}"
 	          th:text="${card.difficulty.label}">中</span>
-	    <span class="card-minutes" th:text="${card.estimatedMinutes} + '分'">5分</span>
+			  <span class="card-minutes"
+			        th:if="${card.estimatedMinutes != null}"
+			        th:text="${card.estimatedMinutes} + '分'">5分</span>
 	  </div>
 
     <p class="card-title" th:text="${card.title}">机の上を5分だけ片づける</p>

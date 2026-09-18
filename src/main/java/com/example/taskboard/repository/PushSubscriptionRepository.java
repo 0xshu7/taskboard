@@ -71,4 +71,17 @@ public interface PushSubscriptionRepository extends JpaRepository<PushSubscripti
 	 * @return 消した件数
 	 */
 	long deleteByEndpoint(String endpoint);
+	
+	/**
+	 * この利用者の届け先が1件でもあるかを返す。
+	 *
+	 * 設定画面のスライドを入で表示するかどうかの判定に使う。
+	 *
+	 * findByUserId で取ってきて件数を見ることもできるが、
+	 * それだと端末の数だけ行を読み込むことになる。
+	 * 知りたいのは「あるか無いか」だけなので、こちらで足りる。
+	 */
+	boolean existsByUserId(Long userId);
+	
+	long deleteByEndpointAndUserId(String endpoint, Long userId);
 }

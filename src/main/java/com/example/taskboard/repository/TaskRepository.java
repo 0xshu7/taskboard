@@ -12,6 +12,7 @@ package com.example.taskboard.repository;
 // TaskStatus … タスクの状態
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -93,6 +94,17 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	 */
 	List<Task> findByUserIdAndStatusNotAndDueDateBetweenOrderByDueDateAsc(
 			Long userId, TaskStatus status, LocalDate from, LocalDate to);
+	
+	/**
+	 * 自動完了の時刻が来た進行中のタスクを探す。
+	 *
+	 * LessThanEqual は「以下」。いまの時刻を渡すと、
+	 * 予定時刻を過ぎたものが返る。
+	 *
+	 * autoCompleteAt が null の行は、この条件では返らない。
+	 * 予約していないタスクが勝手に完了することはない。
+	 */
+	List<Task> findByStatusAndAutoCompleteAtLessThanEqual(TaskStatus status, LocalDateTime time);
 
 	// ===== メソッド（数える） =====
 

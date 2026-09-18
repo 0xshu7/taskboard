@@ -580,6 +580,37 @@ body {
   color: var(--pink);
 }
 
+/* 見出しとボタンを横並びにする */
+.detail-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 自動完了のボタン。ヒントの右上に置く */
+.btn-auto {
+  padding: 5px 14px;
+  border: 2px solid #000;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* おまかせ中。動いていることが分かるように色を付ける */
+.btn-auto-on {
+  background: #FF9020;
+  color: #fff;
+}
+
+/* ボタンを包むフォームが、余計な余白を作らないようにする */
+.auto-form {
+  margin: 0;
+}
+
 /* 書かれたヒント。改行をそのまま改行として見せる。
    pre-line はここだけに付ける。外側の箱に付けると、タグの間の改行まで空行になる */
 .detail-text {

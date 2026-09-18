@@ -2,10 +2,11 @@ package com.example.taskboard.service;
 
 // ===== インポート =====
 // java.time.LocalDate     … 日付だけ。締切に使う
-// java.time.LocalDateTime … 日付＋時刻。完了日時に使う
+// java.time.LocalDateTime … 日付＋時刻。自動完了の予定時刻に使う
 // java.util.List          … リストの型
 //
 // 以下は Spring の部品。
+// Value         … application.yml に書いた値を受け取る
 // Service       … 処理のまとまりです、という印。Spring が管理下に置く
 // Transactional … メソッドの途中で失敗したら、その中の保存をすべて取り消す
 //
@@ -20,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,29 +37,48 @@ import com.example.taskboard.repository.TaskRepository;
  * controller はこのクラスだけを呼び、repository を直接は触らない。
  * 呼び出しの道を1本に保つと、処理の順番や条件が散らばらずに済む。
  *
- * 担当することは3つ。
+ * 担当することは4つ。
  * 1. 取り出す（findActive / findDone / countRemaining / findById）
  * 2. 作る・変える・消す（create / update / nextStatus / reorder / delete）
- * 3. カードからタスクを作る（createFromCard）
+ * 3. カードからタスクを作る（createFromCard / startExisting）
+ * 4. 自動完了の予約（startAuto / cancelAuto）
  *
  * 扱うのは、いまログインしている人のタスクだけ。
  * 誰かは UserService に聞き、このクラスはログインの仕組みを知らない。
  *
- * 状態と完了日時は必ずセットで扱う。
- * 完了にしたのに日時が入っていない、完了を取り消したのに日時が残っている、
- * という食い違いが起きると、完了一覧の並び順が狂う。
- * そのため、状態を変える処理はこのクラスの中に閉じ込めてある。
+ * 1件を取り出すときは、必ず findById を通す。
+ * 他人のタスクかどうかの確認をそこに1か所だけ置いてあるので、
+ * repository を直接呼ぶと、その確認を素通りすることになる。
+ *
+ * 状態と完了日時は Task 側が面倒を見ている。
+ * setStatus を呼べば完了日時も一緒に動くので、
+ * このクラスで日時を触ることはない。
  */
 @Service
 public class TaskService {
 
 	// ===== フィールド =====
 
+	/** 分数が入っていないタスクの既定値。手で追加したタスクに使う */
+	private static final int DEFAULT_MINUTES = 5;
+
 	/** タスクの出し入れ */
 	private final TaskRepository taskRepository;
 
 	/** いまログインしている利用者を教えてくれる係 */
 	private final UserService userService;
+
+	/**
+	 * 自動完了までの時間を割る数。
+	 *
+	 * 1 なら見積もりどおりの時間、60 なら分が秒になる。
+	 * デモで25分待つわけにはいかないので、設定で短くできるようにしてある。
+	 *
+	 * コードではなく application.yml 側で切り替える。
+	 * デモのためにコードを書き換えると、戻し忘れたまま本番の説明をすることになる。
+	 */
+	@Value("${app.auto-complete-divisor:1}")
+	private int autoCompleteDivisor;
 
 	// ===== コンストラクタ =====
 
@@ -92,7 +113,25 @@ public class TaskService {
 	 * @return 表示順に並んだ未完了のタスク
 	 */
 	public List<Task> findActive() {
-		return taskRepository.findByUserIdAndStatusNotOrderBySortOrderAsc(userId(), TaskStatus.DONE);
+
+		List<Task> tasks = taskRepository
+				.findByUserIdAndStatusNotOrderBySortOrderAsc(userId(), TaskStatus.DONE);
+
+		// おまかせ中のタスクを先頭に出す。
+		//
+		// sort は安定並べ替えなので、おまかせ中どうし、そうでないものどうしの
+		// 並び順は元のまま（本人が決めた sort_order）が保たれる。
+		tasks.sort((a, b) -> {
+			boolean aAuto = a.getAutoCompleteAt() != null;
+			boolean bAuto = b.getAutoCompleteAt() != null;
+
+			if (aAuto == bAuto) {
+				return 0;
+			}
+			return aAuto ? -1 : 1;
+		});
+
+		return tasks;
 	}
 
 	/**
@@ -110,16 +149,32 @@ public class TaskService {
 	/**
 	 * タスクを1件取り出す。
 	 *
-	 * 見つからないときは例外を投げる。
-	 * null を返すと、受け取った側が確認を忘れたときに
-	 * ずっと先で分かりにくい形で失敗するため、その場で止める。
+	 * 他人のタスクは取り出せない。
+	 *
+	 * 一覧は user_id で絞っているので、他人のタスクは画面に出ない。
+	 * だが URL の番号を書き換えれば、出ていないものにも手が届く。
+	 * /tasks/999/delete の 999 を他人のタスクにすれば、それが消せてしまう。
+	 *
+	 * 見えないことと、触れないことは別。
+	 * 1件を扱うすべての処理がこのメソッドを通るので、確認はここに1か所だけ置く。
+	 *
+	 * 他人のものだったときも「見つかりません」と同じ扱いにしている。
+	 * 「あなたのものではありません」と返すと、
+	 * その番号のタスクが存在することを相手に教えることになる。
 	 *
 	 * @param id タスクのID
 	 * @return 見つかったタスク
+	 * @throws IllegalArgumentException 無いか、他人のものだったとき
 	 */
 	public Task findById(Long id) {
-		return taskRepository.findById(id)
+
+		Task task = taskRepository.findById(id)
 				.orElseThrow(() -> new IllegalArgumentException("タスクが見つかりません:" + id));
+
+		if (!task.getUserId().equals(userId())) {
+			throw new IllegalArgumentException("タスクが見つかりません:" + id);
+		}
+		return task;
 	}
 
 	// ===== メソッド（作る・変える・消す） =====
@@ -157,8 +212,7 @@ public class TaskService {
 	 * 既存のタスクを書き換える。
 	 *
 	 * 変えられるのは内容・難易度・締切・完了のヒントの4つ。
-	 * 状態と完了日時はここでは触らない。食い違いを防ぐため、
-	 * 状態を変えるのは nextStatus だけに限っている。
+	 * 状態はここでは触らない。変えるのは nextStatus だけに限っている。
 	 *
 	 * @param id         タスクのID
 	 * @param title      新しい内容
@@ -168,6 +222,7 @@ public class TaskService {
 	 */
 	@Transactional
 	public void update(Long id, String title, Difficulty difficulty, LocalDate dueDate, String detail) {
+
 		Task task = findById(id);
 
 		task.setTitle(title);
@@ -184,26 +239,23 @@ public class TaskService {
 	 * 一周させているのは、押し間違えたときに戻せるようにするため。
 	 * 完了にしたものを取り消す道が無いと、間違いが残り続ける。
 	 *
-	 * 完了になったときだけ完了日時を入れ、それ以外では消す。
-	 * この2つを必ず一緒に動かすことが、完了一覧を正しく並べる前提になっている。
+	 * 完了日時はここでは触らない。Task.setStatus が一緒に面倒を見ている。
 	 *
 	 * @param id タスクのID
 	 */
 	@Transactional
 	public void nextStatus(Long id) {
+
 		Task task = findById(id);
 
 		if (task.getStatus() == TaskStatus.TODO) {
 			task.setStatus(TaskStatus.DOING);
-			task.setCompletedAt(null);
 
 		} else if (task.getStatus() == TaskStatus.DOING) {
 			task.setStatus(TaskStatus.DONE);
-			task.setCompletedAt(LocalDateTime.now());
 
 		} else {
 			task.setStatus(TaskStatus.TODO);
-			task.setCompletedAt(null);
 		}
 
 		taskRepository.save(task);
@@ -216,13 +268,14 @@ public class TaskService {
 	 * 上から 0, 1, 2 と番号を振っていくので、
 	 * 送られてきた順がそのまま表示順になる。
 	 *
-	 * @Transactional を付けているのは、途中で失敗したときに
-	 * 順番が半分だけ入れ替わった状態を残さないため。
+	 * findById を通しているので、他人のタスクIDが混ざっていれば途中で止まる。
+	 * @Transactional が付いているため、そこまでの並べ替えも取り消される。
 	 *
 	 * @param ids 上から順に並んだタスクIDの一覧
 	 */
 	@Transactional
 	public void reorder(List<Long> ids) {
+
 		for (int i = 0; i < ids.size(); i++) {
 			Task task = findById(ids.get(i));
 			task.setSortOrder(i);
@@ -240,7 +293,7 @@ public class TaskService {
 		taskRepository.delete(findById(id));
 	}
 
-	// ===== メソッド（カードから作る） =====
+	// ===== メソッド（カードからタスクにする） =====
 
 	/**
 	 * 提案カードからタスクを作る。
@@ -249,7 +302,7 @@ public class TaskService {
 	 * 3択から選んだということは、これからやると決めたということなので、
 	 * もう一度「始める」を押させる意味がない。
 	 *
-	 * カードから写すのは内容・完了のヒント・難易度の3つ。
+	 * カードから写すのは内容・完了のヒント・難易度・かかる時間の4つ。
 	 * 締切は付けない。今すぐ取りかかるものなので、期限を持たせる必要がない。
 	 *
 	 * @param card 選ばれたカード
@@ -263,10 +316,87 @@ public class TaskService {
 		task.setTitle(card.getTitle());
 		task.setDetail(card.getDetail());
 		task.setDifficulty(card.getDifficulty());
+		task.setEstimatedMinutes(card.getEstimatedMinutes());
 		task.setStatus(TaskStatus.DOING);
 		task.setSortOrder(nextSortOrder());
 
 		return taskRepository.save(task);
+	}
+
+	/**
+	 * すでにあるタスクを進行中にする。
+	 *
+	 * 3案の3つ目が選ばれたときに呼ばれる。
+	 * 新しく作らないので、同じ内容のタスクが2件並ぶことがない。
+	 *
+	 * 完了のヒントは、そのタスクが持っていないときだけ入れる。
+	 * 本人が書いたものを、AIが書いたもので黙って上書きしないため。
+	 * 消えたことに気づけるのは本人だけで、戻す手段が無い。
+	 *
+	 * @param taskId 進行中にするタスクのID
+	 * @param detail AIが書いた完了のヒント
+	 */
+	@Transactional
+	public void startExisting(Long taskId, String detail) {
+
+		Task task = findById(taskId);
+
+		task.setStatus(TaskStatus.DOING);
+
+		if (task.getDetail() == null || task.getDetail().isEmpty()) {
+			task.setDetail(detail);
+		}
+
+		taskRepository.save(task);
+	}
+
+	// ===== メソッド（自動完了の予約） =====
+
+	/**
+	 * 「やっちゃう」を押したとき。自動完了を予約する。
+	 *
+	 * 進行中にしたうえで、完了する時刻を決めて入れておく。
+	 * 時間が来たかどうかを見るのはサーバー側なので、
+	 * アプリを閉じていても完了し、通知が届く。
+	 *
+	 * 分数が入っていないタスク（手で追加したもの）は既定値を使う。
+	 *
+	 * @param taskId 予約するタスクのID
+	 */
+	@Transactional
+	public void startAuto(Long taskId) {
+
+		Task task = findById(taskId);
+
+		int minutes = task.getEstimatedMinutes() == null
+				? DEFAULT_MINUTES
+				: task.getEstimatedMinutes();
+
+		// 割った結果が0にならないようにする。
+		// 0秒後だと、押した瞬間に完了してしまい、何が起きたか分からない
+		long seconds = Math.max(minutes * 60L / autoCompleteDivisor, 5);
+
+		task.setStatus(TaskStatus.DOING);
+		task.setAutoCompleteAt(LocalDateTime.now().plusSeconds(seconds));
+
+		taskRepository.save(task);
+	}
+
+	/**
+	 * 「おまかせ中」をもう一度押したとき。予約を取り消す。
+	 *
+	 * 状態は進行中のままにする。
+	 * 押した時点で始めているはずなので、未実施に戻すと手が止まる。
+	 *
+	 * @param taskId 取り消すタスクのID
+	 */
+	@Transactional
+	public void cancelAuto(Long taskId) {
+
+		Task task = findById(taskId);
+
+		task.setAutoCompleteAt(null);
+		taskRepository.save(task);
 	}
 
 	// ===== メソッド（内部で使うもの） =====
@@ -276,9 +406,6 @@ public class TaskService {
 	 *
 	 * 「いまの利用者は誰か」を知っているのは UserService だけにしてある。
 	 * このクラスはログインの仕組みを知らず、IDを受け取るだけで済む。
-	 *
-	 * 短い名前の private メソッドにしているのは、呼び出しが6か所あり、
-	 * 毎回 userService.currentId() と書くと行が長くなって読みにくいため。
 	 *
 	 * @return 利用者のID
 	 */
@@ -303,6 +430,7 @@ public class TaskService {
 	 * @return 付けるべき表示順
 	 */
 	private int nextSortOrder() {
+
 		int max = 0;
 
 		for (Task task : findActive()) {
@@ -311,33 +439,5 @@ public class TaskService {
 			}
 		}
 		return max + 1;
-	}
-	
-	/**
-	 * すでにあるタスクを進行中にする。
-	 *
-	 * 3案の3つ目が選ばれたときに呼ばれる。
-	 * 新しく作らないので、同じ内容のタスクが2件並ぶことがない。
-	 *
-	 * 完了のヒントは、そのタスクが持っていないときだけ入れる。
-	 * 本人が書いたものを、AIが書いたもので黙って上書きしないため。
-	 * 消えたことに気づけるのは本人だけで、戻す手段が無い。
-	 *
-	 * @param taskId 進行中にするタスクのID
-	 * @param detail AIが書いた完了のヒント
-	 */
-	@Transactional
-	public void startExisting(Long taskId, String detail) {
-
-		Task task = taskRepository.findById(taskId)
-				.orElseThrow(() -> new IllegalArgumentException("タスクが見つかりません: " + taskId));
-
-		task.setStatus(TaskStatus.DOING);
-
-		if (task.getDetail() == null || task.getDetail().isEmpty()) {
-			task.setDetail(detail);
-		}
-
-		taskRepository.save(task);
 	}
 }

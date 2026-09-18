@@ -27,7 +27,7 @@ ai:
 
 app:
   base-url: http://localhost:8080
-
+  auto-complete-divisor: 1
 push:
   public-key: ${VAPID_PUBLIC_KEY:}
   private-key: ${VAPID_PRIVATE_KEY:}

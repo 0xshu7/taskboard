@@ -3,8 +3,9 @@ package com.example.taskboard.domain;
 // ===== インポート =====
 // 外から借りてくる部品。何のために借りているかを1行ずつ。
 //
-// java.time.LocalDate     … 日付だけ（2026-09-15）。締切に使う
-// java.time.LocalDateTime … 日付＋時刻。作成日時・完了日時に使う
+// java.time.LocalDate     … 日付だけ（2026-09-18）。締切に使う
+// java.time.LocalDateTime … 日付＋時刻。作成日時・完了日時・自動完了の予定時刻に使う
+// java.util.Objects       … null でも落ちずに比べる道具。equals で使う
 //
 // 以下は JPA（データベースとJavaをつなぐ仕組み）の部品。
 // import は javax ではなく jakarta から始まる。古い記事は javax なので注意。
@@ -17,9 +18,11 @@ package com.example.taskboard.domain;
 // Column          … 列名・空の可否・文字数の上限を指定する
 // Enumerated      … 列挙型をどう保存するかを指定する
 // EnumType        … その保存の仕方（STRING を使う）
+// PrePersist      … 保存される直前に動かすメソッドの印
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,6 +31,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 /**
@@ -36,7 +40,17 @@ import jakarta.persistence.Table;
  * 作られ方は2通り。
  * 1. 画面の「追加する」から手で入力する
  * 2. AIの3択から「これにする」を押す（TaskService.createFromCard）
- * 違いは detail が入っているかどうかだけ。
+ * 後者には完了のヒントとかかる時間の目安が入る。
+ *
+ * 状態と完了日時は必ずセットで動く。
+ * 完了にしたのに日時が入っていない、完了を取り消したのに日時が残っている、
+ * という食い違いが起きると、完了一覧の並び順が狂う。
+ * そのため setStatus が完了日時まで面倒を見ており、
+ * 完了日時だけを外から入れる手段は用意していない。
+ *
+ * 文字数の上限も setter で守っている。
+ * 画面の maxlength は開発者ツールで外せるし、
+ * AIが返す文章の長さはこちらで決められないため。
  */
 
 // ===== アノテーション =====
@@ -49,6 +63,12 @@ public class Task {
 
 	// ===== フィールド =====
 	// ここに書いた項目が、そのままテーブルの列になる。
+
+	/** タスクの内容の上限。列の length と同じ値にしておく */
+	private static final int TITLE_MAX = 100;
+
+	/** 完了のヒントの上限。列の length と同じ値にしておく */
+	private static final int DETAIL_MAX = 300;
 
 	/** 主キー。保存する前は番号が未定なので、null を入れられる Long にする */
 	@Id
@@ -63,7 +83,7 @@ public class Task {
 	 * タスクの内容。
 	 * 画面の maxlength だけでは回避できるので、データベース側にも同じ上限を置く。
 	 */
-	@Column(nullable = false, length = 100)
+	@Column(nullable = false, length = TITLE_MAX)
 	private String title;
 
 	/**
@@ -92,16 +112,20 @@ public class Task {
 	@Column(name = "sort_order", nullable = false)
 	private Integer sortOrder = 0;
 
-	/** 作成日時。new した時点の時刻がそのまま入る */
+	/**
+	 * 作成日時。
+	 *
+	 * 初期値をここに書かず、保存の直前に入れている。
+	 * 下の onCreate を見ること。
+	 */
 	@Column(name = "created_at", nullable = false)
-	private LocalDateTime createdAt = LocalDateTime.now();
+	private LocalDateTime createdAt;
 
 	/**
 	 * 完了日時。未完了なら null。
 	 *
 	 * 完了リストの並び順（新しい順）に使っている。
-	 * 状態と必ずセットで動かす必要があるので、
-	 * 書き換えるのは TaskService.nextStatus の1か所だけにしてある。
+	 * 入れるのは setStatus だけ。外から直接入れる手段は用意していない。
 	 */
 	@Column(name = "completed_at")
 	private LocalDateTime completedAt;
@@ -116,17 +140,63 @@ public class Task {
 	 * nullable = false を付けていないのは、既にデータがある表に
 	 * NOT NULL の列を後から足せないため。
 	 */
-	@Column(length = 300)
+	@Column(length = DETAIL_MAX)
 	private String detail;
 
-	// ===== メソッド =====
+	/**
+	 * かかる時間の目安（分）。
+	 *
+	 * AIの提案から作ったタスクにはカードの値が入る。
+	 * 手で追加したタスクには入らないので null になる。
+	 *
+	 * 「やっちゃう」で自動完了を予約するときに、何分後にするかの元になる。
+	 * null のときは TaskService 側で既定値を使うので、ここでは null のままでよい。
+	 */
+	@Column(name = "estimated_minutes")
+	private Integer estimatedMinutes;
+
+	/**
+	 * 自動完了の予定時刻。予約していなければ null。
+	 *
+	 * 「やっちゃう」を押すと、いまの時刻に estimatedMinutes を足した時刻が入る。
+	 * もう一度押すと null に戻る。
+	 *
+	 * 時間が来たかどうかを見るのはサーバー側なので、
+	 * アプリを閉じていても完了する。画面のタイマーではこれができない。
+	 *
+	 * 「おまかせ中かどうか」は、この値が入っているかどうかだけで決まる。
+	 * 状態を表す列を別に持つと、予定時刻との食い違いが起きる。
+	 */
+	@Column(name = "auto_complete_at")
+	private LocalDateTime autoCompleteAt;
+
+	// ===== メソッド（保存の前に動くもの） =====
+
+	/**
+	 * 保存される直前に、作成日時を入れる。
+	 *
+	 * @PrePersist が付いたメソッドは、JPA が insert の直前に呼ぶ。
+	 * 呼ぶのは自分ではなく、仕組みのほう。
+	 *
+	 * フィールドに = LocalDateTime.now() と書くと、
+	 * 「new した瞬間」の時刻が入る。保存の時刻とは別物になる。
+	 *
+	 * すでに値が入っているときは触らない。
+	 * データを移すときなど、こちらで時刻を指定したい場合があるため。
+	 */
+	@PrePersist
+	protected void onCreate() {
+		if (createdAt == null) {
+			createdAt = LocalDateTime.now();
+		}
+	}
+
+	// ===== メソッド（getter / setter） =====
 	// 中身を読み書きするだけ。計算や判断はここではしない。
+	// ただし、値どうしが食い違うと困るものと、長さの上限だけは setter で面倒を見ている。
 	//
 	// 画面の ${task.title} は、実際には getTitle() を呼んでいる。
 	// getter を書き忘れると、エラーは出ないのに画面が空になる。
-	//
-	// setter は this.○○ = ○○; の左右の綴りを必ず確認する。
-	// 違っていると自分に自分を入れるだけになり、エラーも出ず、値も変わらない。
 
 	/** 主キーを返す */
 	public Long getId() {
@@ -153,14 +223,25 @@ public class Task {
 		return title;
 	}
 
-	/** タスクの内容を入れる */
+	/**
+	 * タスクの内容を入れる。上限を超えたら切り詰める。
+	 *
+	 * 画面の maxlength は開発者ツールで外せるので、守るなら受け取る側で守る。
+	 * AIの提案から作るときも、ここを通る。
+	 */
 	public void setTitle(String title) {
-		this.title = title;
+		this.title = truncate(title, TITLE_MAX);
 	}
 
-	/** 難易度を返す。画面ではさらに .label を呼んで「中」などの文字にしている */
+	/**
+	 * 難易度を返す。画面ではさらに .label を呼んで「中」などの文字にしている。
+	 *
+	 * null のときは中を返す。
+	 * この列を足す前の行や、手でSQLを書いたときに null になりうる。
+	 * null のまま .label を呼ぶと、画面全体が落ちる。
+	 */
 	public Difficulty getDifficulty() {
-		return difficulty;
+		return difficulty != null ? difficulty : Difficulty.MID;
 	}
 
 	/** 難易度を入れる */
@@ -178,19 +259,45 @@ public class Task {
 		this.dueDate = dueDate;
 	}
 
-	/** 状態を返す */
+	/** 状態を返す。null のときは未実施として扱う */
 	public TaskStatus getStatus() {
-		return status;
+		return status != null ? status : TaskStatus.TODO;
 	}
 
-	/** 状態を入れる。完了日時とセットで扱うこと */
+	/**
+	 * 状態を入れる。完了日時もここで面倒を見る。
+	 *
+	 * 完了になったら日時を入れ、それ以外に変わったら消す。
+	 * この2つは必ずセットで動かす必要があるので、1つのメソッドにまとめてある。
+	 * 別々に呼べるようにすると、「完了なのに日時が無い」行ができ、
+	 * 完了一覧の並び順が狂う。
+	 *
+	 * すでに完了で、もう一度完了にされたときは日時を上書きしない。
+	 * 最初に終わった時刻のほうが、記録として意味がある。
+	 *
+	 * @param status 新しい状態
+	 */
 	public void setStatus(TaskStatus status) {
+
 		this.status = status;
+
+		if (status == TaskStatus.DONE) {
+			if (completedAt == null) {
+				completedAt = LocalDateTime.now();
+			}
+		} else {
+			completedAt = null;
+		}
 	}
 
-	/** 表示順を返す */
+	/**
+	 * 表示順を返す。
+	 *
+	 * null のときは0を返す。
+	 * 呼び出し側が int で受け取ると、null のままでは落ちる。
+	 */
 	public Integer getSortOrder() {
-		return sortOrder;
+		return sortOrder != null ? sortOrder : 0;
 	}
 
 	/** 表示順を入れる。並べ替えのとき TaskService.reorder から呼ばれる */
@@ -203,19 +310,19 @@ public class Task {
 		return createdAt;
 	}
 
-	/** 作成日時を入れる。初期値が入っているので、ふつうは呼ばない */
+	/** 作成日時を入れる。ふつうは onCreate が入れるので、自分で呼ぶことはない */
 	public void setCreatedAt(LocalDateTime createdAt) {
 		this.createdAt = createdAt;
 	}
 
-	/** 完了日時を返す。未完了なら null */
+	/**
+	 * 完了日時を返す。未完了なら null。
+	 *
+	 * setter は用意していない。入れるのは setStatus の仕事。
+	 * 状態と食い違う値が入る道を、そもそも作らない。
+	 */
 	public LocalDateTime getCompletedAt() {
 		return completedAt;
-	}
-
-	/** 完了日時を入れる。完了以外に戻すときは null を入れる */
-	public void setCompletedAt(LocalDateTime completedAt) {
-		this.completedAt = completedAt;
 	}
 
 	/** やり方と終わりの線を返す。手入力のタスクでは null */
@@ -223,8 +330,109 @@ public class Task {
 		return detail;
 	}
 
-	/** やり方と終わりの線を入れる。createFromCard でカードから引き継ぐ */
+	/**
+	 * やり方と終わりの線を入れる。上限を超えたら切り詰める。
+	 *
+	 * 超えたまま保存すると、列の上限に引っかかって例外で止まる。
+	 * 3案のうち1枚が長かっただけでスタート全体が失敗し、
+	 * 保存はフォールバックの外なので固定3案にも切り替わらない。
+	 *
+	 * 切れた文章が出るほうが、画面が出ないよりましだと判断した。
+	 * ただしこれは保険で、本来はプロンプト側で超えさせない（v1.6 で250字を指定）。
+	 */
 	public void setDetail(String detail) {
-		this.detail = detail;
+		this.detail = truncate(detail, DETAIL_MAX);
+	}
+
+	/**
+	 * かかる時間の目安を返す。手入力のタスクでは null。
+	 *
+	 * ここでは既定値を返さない。
+	 * 「目安が無い」ことと「5分」は違う意味なので、
+	 * 何分にするかの判断は TaskService.startAuto に任せる。
+	 */
+	public Integer getEstimatedMinutes() {
+		return estimatedMinutes;
+	}
+
+	/** かかる時間の目安を入れる。createFromCard でカードから引き継ぐ */
+	public void setEstimatedMinutes(Integer estimatedMinutes) {
+		this.estimatedMinutes = estimatedMinutes;
+	}
+
+	/** 自動完了の予定時刻を返す。予約していなければ null */
+	public LocalDateTime getAutoCompleteAt() {
+		return autoCompleteAt;
+	}
+
+	/** 自動完了の予定時刻を入れる。取り消すときは null を入れる */
+	public void setAutoCompleteAt(LocalDateTime autoCompleteAt) {
+		this.autoCompleteAt = autoCompleteAt;
+	}
+
+	// ===== メソッド（同じタスクかどうかの判定） =====
+
+	/**
+	 * 同じタスクかどうかを判定する。
+	 *
+	 * 比べるのは id。User は googleSub で比べたが、
+	 * Task には「変わらない鍵」がタイトルにも何にも無いので、id を使う。
+	 *
+	 * id が null のとき（まだ保存していないとき）は false を返す。
+	 * 保存前のタスクは、どれも id が無いので、
+	 * 比べると全部同じものになってしまう。
+	 * 同じインスタンスかどうかは、いちばん上の == で判定している。
+	 */
+	@Override
+	public boolean equals(Object other) {
+
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof Task task)) {
+			return false;
+		}
+		return id != null && Objects.equals(id, task.id);
+	}
+
+	/**
+	 * ハッシュ値を返す。
+	 *
+	 * 固定の値を返している。妙に見えるが、これが正しい。
+	 *
+	 * id から作ると、保存の前後で値が変わる（null → 1 など）。
+	 * Set や Map は入れたときのハッシュ値で場所を決めるので、
+	 * あとで変わると、入れたはずのものが見つからなくなる。
+	 *
+	 * 固定値だと、Set の中で全部が同じ場所に入るため、
+	 * 件数が多いと探すのが遅くなる。ただし正しさは保たれる。
+	 * 遅さは件数次第だが、間違いは件数に関係なく起きる。
+	 */
+	@Override
+	public int hashCode() {
+		return 31;
+	}
+
+	// ===== メソッド（内部で使うもの） =====
+
+	/**
+	 * 文字数の上限を超えていたら切り詰める。
+	 *
+	 * substring(0, max) は「先頭から max 文字ぶん」を取り出す書き方。
+	 * 元の文字列は変わらず、切り取った新しい文字列が返る。
+	 *
+	 * private static にしているのは、
+	 * このクラスの中だけで使い、どのタスクにも属さない処理だから。
+	 *
+	 * @param text 元の文字
+	 * @param max  上限の文字数
+	 * @return 上限に収まる文字。null ならそのまま null
+	 */
+	private static String truncate(String text, int max) {
+
+		if (text != null && text.length() > max) {
+			return text.substring(0, max);
+		}
+		return text;
 	}
 }

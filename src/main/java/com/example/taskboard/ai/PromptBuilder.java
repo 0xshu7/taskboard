@@ -71,7 +71,7 @@ public class PromptBuilder {
 	 * 文章を直したら、必ずここも上げる。
 	 * 上げ忘れると、違う文章が同じ版として記録される。
 	 */
-	private static final String VERSION = "v1.5";
+	private static final String VERSION = "v1.6";
 
 	/**
 	 * 本人の情報。
@@ -273,6 +273,8 @@ public class PromptBuilder {
 		p.append("・最後の行は「終わり：」に続けて、やり終えたときに目で見える状態を書く。\n");
 		p.append("・その状態になったら、本人がどう思っていても終わりです。そう書けるものだけを書く。\n");
 		p.append("・行の区切りは改行（\\n）にする。\n");
+		p.append("・行の区切りは改行（\\n）にする。\n");
+		p.append("・全体で250字を超えないようにする。保存できる上限が決まっているため。\n");
 		p.append("例：\n");
 		p.append("　　机の上のものを全部いったん床に置く\n");
 		p.append("　　書類だけを拾って1か所に積む\n");
@@ -289,7 +291,7 @@ public class PromptBuilder {
 		p.append("title（30字以内）／category（生活・勉強・食事・休日 のいずれか）／\n");
 		p.append("granularity（FIVE_MIN・TODAY・GROUP）／difficulty（LOW・MID・HIGH）／\n");
 		p.append("estimatedMinutes（整数）／reason（40字以内）／detail（上の書き方）\n");
-
+		
 		return p.toString();
 	}
 }

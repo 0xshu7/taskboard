@@ -39,6 +39,9 @@ import com.example.taskboard.service.UserService;
  *
  * どれも fetch で呼ばれるので、CSRF の合言葉をヘッダーに載せる必要がある。
  * それは push.js が受け持っている。
+ *
+ * 利用者IDはブラウザから受け取らない。
+ * userService から取るので、他人の届け先として登録することができない。
  */
 
 // ===== アノテーション =====
@@ -83,12 +86,23 @@ public class PushController {
 	 * ブラウザは、許可済みの状態で画面を開くたびに同じ届け先を送ってくる。
 	 * 毎回保存すると、同じ通知が何度も届くことになる。
 	 *
+	 * 届け先が空のときも何もしない。
+	 * ブラウザ側で組み立てに失敗すると、空のまま送られてくることがある。
+	 * 保存してしまうと、送信のたびに失敗する行が残り続ける。
+	 *
+	 * 利用者IDは userService から取る。
+	 * ブラウザに送らせると、他人の届け先として登録できてしまう。
+	 *
 	 * @param form ブラウザから届いた届け先
-	 * @return 画面では使わないが、成功したことを示す文字列
+	 * @return 画面では使わないが、結果を示す文字列
 	 */
 	@PostMapping("/push/subscribe")
 	@Transactional
 	public String subscribe(@RequestBody PushSubscriptionForm form) {
+
+		if (isBlank(form.getEndpoint()) || isBlank(form.getP256dh()) || isBlank(form.getAuth())) {
+			return "invalid";
+		}
 
 		// すでに登録済みなら、そのまま終わる
 		if (subscriptionRepository.findByEndpoint(form.getEndpoint()).isPresent()) {
@@ -110,17 +124,30 @@ public class PushController {
 	 * 通知を切ったときに呼ばれる。
 	 * 消さずに残すと、切ったつもりでも届き続ける。
 	 *
+	 * 自分の届け先だけを消す。
+	 * endpoint だけを見て消すこともできるが、それだと
+	 * 他人の endpoint を知っている人が、その通知を切れてしまう。
+	 *
+	 * 推測できる長さの文字列ではないので危険は低い。
+	 * ただ「自分のものだけ操作できる」という線を、
+	 * タスクと同じようにここでも引いておく。
+	 *
 	 * deleteBy... で始まるメソッドは、呼ぶ側に @Transactional が要る。
 	 * 削除は途中で止まると中途半端な状態が残るため、
 	 * 「全部やるか、全部やらないか」を Spring に保証させている。
 	 *
 	 * @param form ブラウザから届いた届け先
-	 * @return 成功したことを示す文字列
+	 * @return 結果を示す文字列
 	 */
 	@PostMapping("/push/unsubscribe")
 	@Transactional
 	public String unsubscribe(@RequestBody PushSubscriptionForm form) {
-		subscriptionRepository.deleteByEndpoint(form.getEndpoint());
+
+		if (isBlank(form.getEndpoint())) {
+			return "invalid";
+		}
+
+		subscriptionRepository.deleteByEndpointAndUserId(form.getEndpoint(), userService.currentId());
 		return "ok";
 	}
 
@@ -136,5 +163,20 @@ public class PushController {
 	public String test() {
 		notificationService.sendNow();
 		return "ok";
+	}
+
+	// ===== メソッド（内部で使うもの） =====
+
+	/**
+	 * 中身が無い文字かどうかを判定する。
+	 *
+	 * isBlank は「空文字か、空白だけか」を見る。
+	 * isEmpty だと、空白1文字が通ってしまう。
+	 *
+	 * @param text 判定する文字
+	 * @return 中身が無ければ true
+	 */
+	private boolean isBlank(String text) {
+		return text == null || text.isBlank();
 	}
 }

@@ -1,7 +1,9 @@
 package com.example.taskboard.domain;
 
 // ===== インポート =====
-// すべて JPA の部品。日付を扱わないため java.time は使わない。
+// java.util.Objects … null でも落ちずに比べる道具。equals で使う
+//
+// 以下は JPA の部品。日付を扱わないため java.time は使わない。
 //
 // Entity         … このクラスはテーブルに対応する、という印
 // Table          … 対応するテーブル名を指定する
@@ -11,6 +13,8 @@ package com.example.taskboard.domain;
 // Column         … 列名・空の可否・文字数の上限を指定する
 // Enumerated     … 列挙型をどう保存するかを指定する
 // EnumType       … その保存の仕方（STRING を使う）
+
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -27,14 +31,21 @@ import jakarta.persistence.Table;
  *
  * 3枚は重さが異なり、position がその順番を表す。
  * 1枚目は数分で終わるもの、2枚目は今日中に終わって進みが見えるもの、
- * 3枚目は手が止まっている原因そのものを片づけるもの。
+ * 3枚目はリストにあるタスクをそのまま使ったもの。
  * どれを選ぶかで、その日の自分の状態を申告することになる。
  *
  * 選ばれたカードは TaskService.createFromCard によって Task に写される。
- * 写されるのは title・detail・difficulty で、それ以外はカード側に残る。
+ * 写されるのは title・detail・difficulty・estimatedMinutes で、
+ * それ以外はカード側に残る。
+ *
+ * sourceTaskId が入っているカードは写さない。
+ * 元のタスクを進行中にするだけで、新しいタスクは作らない。
  *
  * カードは選ばれなくても消さずに残す。
  * 「何を出して、何が選ばれなかったか」が、提案の質を測る材料になるため。
+ *
+ * 文字数の上限は setter で守っている。
+ * 中身はAIが返すものなので、長さをこちらで決められないため。
  */
 
 // ===== アノテーション =====
@@ -46,6 +57,18 @@ import jakarta.persistence.Table;
 public class ProposalCard {
 
 	// ===== フィールド =====
+
+	/** 見出しの上限。列の length と同じ値にしておく */
+	private static final int TITLE_MAX = 100;
+
+	/** 種類の上限 */
+	private static final int CATEGORY_MAX = 30;
+
+	/** 手順と終わりの線の上限 */
+	private static final int DETAIL_MAX = 300;
+
+	/** 勧める理由の上限 */
+	private static final int REASON_MAX = 200;
 
 	/** 主キー。保存する前は番号が未定なので、null を入れられる Long にする */
 	@Id
@@ -75,12 +98,13 @@ public class ProposalCard {
 	 * カードの見出し。選ぶときに読む文。
 	 *
 	 * detail の要約である必要はない。何の案かが一目で分かる短さを優先する。
+	 * 「〇〇として、△△する」の形で、頭に時間帯の言葉が入る。
 	 */
-	@Column(nullable = false, length = 100)
+	@Column(nullable = false, length = TITLE_MAX)
 	private String title;
 
 	/** 生活 / 勉強 / 食事 / 休日 など。どんな種類の案かを表す */
-	@Column(length = 30)
+	@Column(length = CATEGORY_MAX)
 	private String category;
 
 	/**
@@ -92,7 +116,7 @@ public class ProposalCard {
 	 * 配列で持つとテーブルがもう1つ必要になるため、1本の文字列にして
 	 * 画面側の white-space: pre-line で改行として見せている。
 	 */
-	@Column(length = 300)
+	@Column(length = DETAIL_MAX)
 	private String detail;
 
 	/** 大きさの区分。FIVE_MIN / TODAY / GROUP */
@@ -120,7 +144,7 @@ public class ProposalCard {
 	 * 同じ案でも、理由が添えられているかどうかで受け取り方が変わる。
 	 * 評価や励ましは書かず、いま選ぶ手がかりだけを短く示す。
 	 */
-	@Column(length = 200)
+	@Column(length = REASON_MAX)
 	private String reason;
 
 	/**
@@ -147,9 +171,9 @@ public class ProposalCard {
 	@Column(name = "source_task_id")
 	private Long sourceTaskId;
 
-	
-	// ===== メソッド =====
+	// ===== メソッド（getter / setter） =====
 	// 中身を読み書きするだけ。計算や判断はここではしない。
+	// ただし、文字数の上限だけは setter で面倒を見ている。
 	//
 	// boolean の getter は get ではなく is で始める。
 	// Thymeleaf も Spring も isXxx() を探しに行くため、get では画面から読めない。
@@ -189,9 +213,14 @@ public class ProposalCard {
 		return title;
 	}
 
-	/** 見出しを入れる */
+	/**
+	 * 見出しを入れる。上限を超えたら切り詰める。
+	 *
+	 * AIが返すものなので、長さをこちらで決められない。
+	 * プロンプトで30字と指定しているが、守られる保証はない。
+	 */
 	public void setTitle(String title) {
-		this.title = title;
+		this.title = truncate(title, TITLE_MAX);
 	}
 
 	/** 種類を返す */
@@ -199,9 +228,9 @@ public class ProposalCard {
 		return category;
 	}
 
-	/** 種類を入れる */
+	/** 種類を入れる。上限を超えたら切り詰める */
 	public void setCategory(String category) {
-		this.category = category;
+		this.category = truncate(category, CATEGORY_MAX);
 	}
 
 	/** 手順と終わりの線を返す */
@@ -209,9 +238,18 @@ public class ProposalCard {
 		return detail;
 	}
 
-	/** 手順と終わりの線を入れる */
+	/**
+	 * 手順と終わりの線を入れる。上限を超えたら切り詰める。
+	 *
+	 * 超えたまま保存すると、列の上限に引っかかって例外で止まる。
+	 * 3案のうち1枚が長かっただけでスタート全体が失敗し、
+	 * 保存はフォールバックの外なので固定3案にも切り替わらない。
+	 *
+	 * 切れた文章が出るほうが、画面が出ないよりましだと判断した。
+	 * ただしこれは保険で、本来はプロンプト側で超えさせない（v1.6 で250字を指定）。
+	 */
 	public void setDetail(String detail) {
-		this.detail = detail;
+		this.detail = truncate(detail, DETAIL_MAX);
 	}
 
 	/** 大きさの区分を返す */
@@ -224,9 +262,9 @@ public class ProposalCard {
 		this.granularity = granularity;
 	}
 
-	/** 難易度を返す */
+	/** 難易度を返す。null のときは中を返す */
 	public Difficulty getDifficulty() {
-		return difficulty;
+		return difficulty != null ? difficulty : Difficulty.MID;
 	}
 
 	/** 難易度を入れる */
@@ -249,9 +287,9 @@ public class ProposalCard {
 		return reason;
 	}
 
-	/** 勧める理由を入れる */
+	/** 勧める理由を入れる。上限を超えたら切り詰める */
 	public void setReason(String reason) {
-		this.reason = reason;
+		this.reason = truncate(reason, REASON_MAX);
 	}
 
 	/** 選ばれたかどうかを返す */
@@ -263,7 +301,6 @@ public class ProposalCard {
 	public void setChosen(boolean chosen) {
 		this.chosen = chosen;
 	}
-	
 
 	/** 元になったタスクのIDを返す。新しい案なら null */
 	public Long getSourceTaskId() {
@@ -273,5 +310,61 @@ public class ProposalCard {
 	/** 元になったタスクのIDを入れる */
 	public void setSourceTaskId(Long sourceTaskId) {
 		this.sourceTaskId = sourceTaskId;
+	}
+
+	// ===== メソッド（同じカードかどうかの判定） =====
+
+	/**
+	 * 同じカードかどうかを判定する。
+	 *
+	 * 比べるのは id。Task と同じ考え方で、
+	 * カードには「変わらない鍵」が他に無いため。
+	 *
+	 * id が null のとき（まだ保存していないとき）は false を返す。
+	 * 保存前のカードは3枚とも id が無いので、
+	 * 比べると全部同じものになってしまう。
+	 */
+	@Override
+	public boolean equals(Object other) {
+
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof ProposalCard card)) {
+			return false;
+		}
+		return id != null && Objects.equals(id, card.id);
+	}
+
+	/**
+	 * ハッシュ値を返す。
+	 *
+	 * 固定の値を返している。id から作ると、保存の前後で値が変わるため。
+	 * 詳しくは Task.hashCode の説明を見ること。
+	 */
+	@Override
+	public int hashCode() {
+		return 31;
+	}
+
+	// ===== メソッド（内部で使うもの） =====
+
+	/**
+	 * 文字数の上限を超えていたら切り詰める。
+	 *
+	 * Task にも同じものがある。共通のクラスに出すこともできるが、
+	 * 7行のために参照されるクラスを1つ増やすと、
+	 * パッケージの構成に手が入る。3か所目が出たときに考える。
+	 *
+	 * @param text 元の文字
+	 * @param max  上限の文字数
+	 * @return 上限に収まる文字。null ならそのまま null
+	 */
+	private static String truncate(String text, int max) {
+
+		if (text != null && text.length() > max) {
+			return text.substring(0, max);
+		}
+		return text;
 	}
 }

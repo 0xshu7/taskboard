@@ -1,7 +1,8 @@
 package com.example.taskboard.domain;
 
 // ===== インポート =====
-// java.time.LocalDateTime … 日付＋時刻。押した時刻と決めた時刻に使う
+// java.time.LocalDateTime … 日付＋時刻。押した時刻・決めた時刻に使う
+// java.util.Objects       … null でも落ちずに比べる道具。equals で使う
 //
 // 以下は JPA の部品。
 // Entity         … このクラスはテーブルに対応する、という印
@@ -9,11 +10,13 @@ package com.example.taskboard.domain;
 // Id             … 主キーの印
 // GeneratedValue … 番号を自動で振らせる
 // GenerationType … その振り方の種類（IDENTITY を使う）
-// Column         … 列名・空の可否・文字数の上限・列の型を指定する
+// Column         … 列名・空の可否・文字数の上限を指定する
 // Enumerated     … 列挙型をどう保存するかを指定する
 // EnumType       … その保存の仕方（STRING を使う）
+// PrePersist     … 保存される直前に動かすメソッドの印
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -22,23 +25,26 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 /**
- * スタートを1回押したときの「提案1セット」。proposal_sets テーブルの1行にあたる。
+ * 提案1セット。proposal_sets テーブルの1行にあたる。
  *
- * 1セットにつき ProposalCard が3枚ぶら下がる。
- * カード側が proposalSetId でこのセットのIDを持つ形でつながっている。
+ * スタートを押すたびに1行できる。カードは3枚ぶら下がる。
  *
- * このクラスは3案そのものではなく、「いつ・どうやって・どうなったか」を持つ。
+ * 選ばれなかったセットも消さずに残す。
+ * 「何を出して、何が選ばれなかったか」が、提案の質を測る材料になるため。
  *
- * 記録している内容は3種類。
- * 1. 時間  … requestedAt と decidedAt。その差が迷い時間になる
- * 2. 出所  … source。AI が答えたのか、失敗して固定3案を出したのか
- * 3. 文面  … promptText。そのとき送ったプロンプトの全文
+ * requestedAt と decidedAt の差が「迷い時間」。
+ * 押してから決めるまでにどれだけ止まっていたかが、そのまま記録になる。
  *
- * 2と3があることで、あとから「どの版のプロンプトが、どんな3案を出したか」を
- * 突き合わせられる。プロンプトを改良していくための材料になる。
+ * promptText には、AIへ送った文章をそのまま保存している。
+ * プロンプトを直していく期間は、送った文章そのものが残っているほうが役に立つ。
+ * 「この3案が出たときのプロンプトはこれ」と後から見返せる。
+ *
+ * source には AI / MOCK / FALLBACK のどれかが入る。
+ * AIが何回失敗したかを、あとから数えられるようにするため。
  */
 
 // ===== アノテーション =====
@@ -56,79 +62,97 @@ public class ProposalSet {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	/** 誰のものか。users テーブルの id を指す */
+	/** 誰のセットか。users テーブルの id を指す */
 	@Column(name = "user_id", nullable = false)
 	private Long userId;
 
 	/**
-	 * スタートを押した時刻。new した時点の時刻がそのまま入る。
+	 * スタートを押した時刻。
 	 *
-	 * 事前生成したセットを再利用するときは、押された時刻に入れ直す。
-	 * 作った時刻のままでは、迷い時間に待ち時間が混ざってしまうため。
+	 * 初期値をここに書かず、保存の直前に入れている。
+	 * 下の onCreate を見ること。
 	 *
-	 * この列の日付を重複なく数えたものが、実績画面の「来た日数」になる。
+	 * decidedAt との差が迷い時間になるので、
+	 * 実際に押された時刻とずれると、記録の意味が失われる。
 	 */
 	@Column(name = "requested_at", nullable = false)
-	private LocalDateTime requestedAt = LocalDateTime.now();
+	private LocalDateTime requestedAt;
 
 	/**
-	 * どれかを選んだ、または別の話題を押した時刻。まだなら null。
+	 * 選んだ、または別の案にした時刻。まだ決めていなければ null。
 	 *
-	 * requestedAt との差が「迷い時間」になる。
-	 * 何秒で迷いと見なすかはアプリ側では決めず、秒数をそのままプロンプトへ渡す。
-	 * 同じ判断を2か所に持つと食い違うため、解釈は AI に任せる。
-	 *
-	 * ただし上限だけは設ける。長すぎる場合は席を外していたとみなし、
-	 * プロンプトへ渡さない（app.hesitation.ignore-seconds）。
+	 * requestedAt との差が迷い時間。
 	 */
 	@Column(name = "decided_at")
 	private LocalDateTime decidedAt;
 
 	/**
-	 * どんな状況で出した提案か。現在は NORMAL のみ。
+	 * どんな出し方をしたか。いまは NORMAL だけ。
 	 *
-	 * 「久しぶりに開いた」「試験が近い」などで出し分ける拡張を見込んで列だけ用意している。
-	 * 値が増えたときは列挙型に変える。
+	 * 提案の出し方を増やしたときに、あとから区別できるようにしてある。
+	 * 使い道が増えなければ、列ごと消してよい。
 	 */
-	@Column(length = 20, nullable = false)
+	@Column(length = 20)
 	private String mode = "NORMAL";
 
 	/**
-	 * この3案を誰が作ったか。MOCK / AI / FALLBACK のいずれか。
+	 * この3案がどこから来たか。AI / MOCK / FALLBACK のどれか。
 	 *
-	 * MOCK     … 開発用の固定3案（ai.mock=true）
-	 * AI       … Gemini が返した3案
-	 * FALLBACK … AI の呼び出しに失敗し、固定3案で代替した
-	 *
-	 * FALLBACK の割合を数えれば、AI がどのくらい失敗しているかを後から測れる。
+	 * AIが失敗した回数を、あとから数えるために持っている。
+	 * 「落ちても止まらない」と言うだけでなく、
+	 * 何回落ちたかを数字で言えるようにするため。
 	 */
-	@Column(length = 10, nullable = false)
+	@Column(length = 20)
 	private String source = "MOCK";
 
 	/**
-	 * このセットの状態。OPEN / CHOSEN / RETOPIC / EXPIRED。
+	 * セットの状態。OPEN（まだ選んでいない）／CHOSEN（選んだ）／RETOPIC（別の案にした）。
 	 *
-	 * OPEN のものだけが再利用できる。詳しくは ProposalStatus を参照。
+	 * EnumType.STRING で文字列として保存する。
+	 * 数字で保存すると、あとから項目を足したときに過去のデータの意味がずれる。
 	 */
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 10)
 	private ProposalStatus status = ProposalStatus.OPEN;
 
 	/**
-	 * 実際に AI へ送ったプロンプトの全文。
+	 * AIへ送った文章そのもの。
 	 *
-	 * プロンプトは版を重ねて改良していくため、「この3案が出たときの文章」を
-	 * そのまま残しておく。あとから版ごとの出力を比較できる。
+	 * 先頭にプロンプトの版（# prompt v1.6）が書き込まれているので、
+	 * 「どの版が、どんな3案を出したか」を突き合わせられる。
 	 *
-	 * columnDefinition = "TEXT" は、列の型を直接指定する書き方。
-	 * 通常の VARCHAR には長さの上限があるが、プロンプトは数千文字になるため
-	 * 長い文章を入れられる TEXT にしている。
+	 * ※ length は元のファイルの値をそのまま使うこと。
+	 *    ここを変えると起動時に ALTER TABLE が走る。
 	 */
-	@Column(name = "prompt_text", columnDefinition = "TEXT")
+	@Column(name = "prompt_text", length = 5000)
 	private String promptText;
 
-	// ===== メソッド =====
-	// 中身を読み書きするだけ。計算や判断はここではしない。
+	// ===== メソッド（保存の前に動くもの） =====
+
+	/**
+	 * 保存される直前に、押した時刻を入れる。
+	 *
+	 * @PrePersist が付いたメソッドは、JPA が insert の直前に呼ぶ。
+	 * 呼ぶのは自分ではなく、仕組みのほう。
+	 *
+	 * フィールドに = LocalDateTime.now() と書くと、
+	 * 「new した瞬間」の時刻が入る。
+	 *
+	 * いまは押されてから作っているので差はほとんど無いが、
+	 * AIの応答を待つ数秒ぶんだけ、new と保存の間が空く。
+	 * 迷い時間の起点なので、実際に保存された時刻に揃えておく。
+	 *
+	 * すでに値が入っているときは触らない。
+	 * ProposalService が押した時刻を明示的に入れている場合は、そちらを優先する。
+	 */
+	@PrePersist
+	protected void onCreate() {
+		if (requestedAt == null) {
+			requestedAt = LocalDateTime.now();
+		}
+	}
+
+	// ===== メソッド（getter / setter） =====
 
 	/** 主キーを返す */
 	public Long getId() {
@@ -140,12 +164,12 @@ public class ProposalSet {
 		this.id = id;
 	}
 
-	/** 誰の提案かを返す */
+	/** 誰のセットかを返す */
 	public Long getUserId() {
 		return userId;
 	}
 
-	/** 誰の提案かを入れる */
+	/** 誰のセットかを入れる */
 	public void setUserId(Long userId) {
 		this.userId = userId;
 	}
@@ -155,7 +179,7 @@ public class ProposalSet {
 		return requestedAt;
 	}
 
-	/** スタートを押した時刻を入れる。事前生成を再利用するとき入れ直す */
+	/** スタートを押した時刻を入れる */
 	public void setRequestedAt(LocalDateTime requestedAt) {
 		this.requestedAt = requestedAt;
 	}
@@ -170,43 +194,81 @@ public class ProposalSet {
 		this.decidedAt = decidedAt;
 	}
 
-	/** どんな状況で出した提案かを返す */
+	/** 出し方を返す。null のときは NORMAL として扱う */
 	public String getMode() {
-		return mode;
+		return mode != null ? mode : "NORMAL";
 	}
 
-	/** どんな状況で出した提案かを入れる */
+	/** 出し方を入れる */
 	public void setMode(String mode) {
 		this.mode = mode;
 	}
 
-	/** 誰が作った3案かを返す。MOCK / AI / FALLBACK */
+	/**
+	 * どこから来た3案かを返す。null のときは MOCK として扱う。
+	 *
+	 * null を返すと、呼び出し側の "AI".equals(source) のような比較で
+	 * 静かに false になり、原因が分かりにくい。
+	 */
 	public String getSource() {
-		return source;
+		return source != null ? source : "MOCK";
 	}
 
-	/** 誰が作った3案かを入れる */
+	/** どこから来た3案かを入れる */
 	public void setSource(String source) {
 		this.source = source;
 	}
 
-	/** セットの状態を返す */
+	/** 状態を返す。null のときは未選択として扱う */
 	public ProposalStatus getStatus() {
-		return status;
+		return status != null ? status : ProposalStatus.OPEN;
 	}
 
-	/** セットの状態を入れる */
+	/** 状態を入れる */
 	public void setStatus(ProposalStatus status) {
 		this.status = status;
 	}
 
-	/** 送ったプロンプトの全文を返す */
+	/** 送った文章を返す */
 	public String getPromptText() {
 		return promptText;
 	}
 
-	/** 送ったプロンプトの全文を入れる */
+	/** 送った文章を入れる */
 	public void setPromptText(String promptText) {
 		this.promptText = promptText;
+	}
+
+	// ===== メソッド（同じセットかどうかの判定） =====
+
+	/**
+	 * 同じセットかどうかを判定する。
+	 *
+	 * 比べるのは id。Task と同じ考え方で、
+	 * セットには「変わらない鍵」が他に無いため。
+	 *
+	 * id が null のとき（まだ保存していないとき）は false を返す。
+	 */
+	@Override
+	public boolean equals(Object other) {
+
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof ProposalSet set)) {
+			return false;
+		}
+		return id != null && Objects.equals(id, set.id);
+	}
+
+	/**
+	 * ハッシュ値を返す。
+	 *
+	 * 固定の値を返している。id から作ると、保存の前後で値が変わるため。
+	 * 詳しくは Task.hashCode の説明を見ること。
+	 */
+	@Override
+	public int hashCode() {
+		return 31;
 	}
 }
