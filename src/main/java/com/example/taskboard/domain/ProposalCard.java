@@ -132,6 +132,22 @@ public class ProposalCard {
 	@Column(nullable = false)
 	private boolean chosen = false;
 
+	/**
+	 * 元になったタスクのID。
+	 *
+	 * 新しい案なら null。
+	 * リストにあるタスクを拾ってきた案なら、そのタスクのIDが入る。
+	 *
+	 * 選ばれたときの動きが、この値で変わる。
+	 * null なら新しくタスクを作り、値があればそのタスクを進行中にする。
+	 *
+	 * 画面のバッジ（あたらしい／リストから）も、この値だけを見て決めている。
+	 * 見た目のためだけの項目を別に持つと、中の動きと食い違うため。
+	 */
+	@Column(name = "source_task_id")
+	private Long sourceTaskId;
+
+	
 	// ===== メソッド =====
 	// 中身を読み書きするだけ。計算や判断はここではしない。
 	//
@@ -246,5 +262,16 @@ public class ProposalCard {
 	/** 選ばれたかどうかを入れる */
 	public void setChosen(boolean chosen) {
 		this.chosen = chosen;
+	}
+	
+
+	/** 元になったタスクのIDを返す。新しい案なら null */
+	public Long getSourceTaskId() {
+		return sourceTaskId;
+	}
+
+	/** 元になったタスクのIDを入れる */
+	public void setSourceTaskId(Long sourceTaskId) {
+		this.sourceTaskId = sourceTaskId;
 	}
 }

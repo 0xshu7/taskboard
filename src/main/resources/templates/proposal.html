@@ -29,12 +29,21 @@
   <li class="card" th:each="card : ${cards}"
       th:classappend="'card-' + ${card.position}">
 
-    <div class="card-head">
-      <span class="card-category" th:text="${card.category}">生活</span>
-      <span class="badge" th:classappend="'badge-' + ${card.difficulty}"
-            th:text="${card.difficulty.label}">中</span>
-      <span class="card-minutes" th:text="${card.estimatedMinutes} + '分'">5分</span>
-    </div>
+	  <div class="card-head">
+	    <span class="card-category" th:text="${card.category}">生活</span>
+
+	    <!-- どこから来た案かを出す。
+	         sourceTaskId が null なら新しい案、値があればリストにあったもの。
+	         表示のためだけの項目は持たず、中の動きと同じ値を見ている -->
+	    <span class="card-tag card-tag-new"
+	          th:if="${card.sourceTaskId == null}">あたらしい</span>
+	    <span class="card-tag card-tag-list"
+	          th:unless="${card.sourceTaskId == null}">リストから</span>
+
+	    <span class="badge" th:classappend="'badge-' + ${card.difficulty}"
+	          th:text="${card.difficulty.label}">中</span>
+	    <span class="card-minutes" th:text="${card.estimatedMinutes} + '分'">5分</span>
+	  </div>
 
     <p class="card-title" th:text="${card.title}">机の上を5分だけ片づける</p>
     <p class="card-reason" th:text="${card.reason}">まず手を動かすと、次に進みやすいので</p>
@@ -49,12 +58,12 @@
    
   </ul>
 
-  <!-- ===== 別の話題にする ===== -->
-  <form th:action="@{'/proposals/' + ${set.id} + '/retopic'}" method="post" class="retopic-form"
-        onsubmit="this.querySelector('button').disabled = true;
-                  this.querySelector('button').textContent = '考えています…';">
-				    <button type="submit" class="btn-retopic">別の話題にする</button>
-				  </form>
+  <!-- ===== 別の案を見る ===== -->
+  <!-- ボタンを止める処理は effects.js が持っている。
+       音を鳴らして「AIが考えています…」を出すところまで、あちらで一括して扱う -->
+  <form th:action="@{'/proposals/' + ${set.id} + '/retopic'}" method="post" class="retopic-form">
+    <button type="submit" class="btn-retopic">別の案を見る</button>
+  </form>
 
 </div>
 <script th:src="@{/js/effects.js}"></script>

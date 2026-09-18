@@ -312,4 +312,32 @@ public class TaskService {
 		}
 		return max + 1;
 	}
+	
+	/**
+	 * すでにあるタスクを進行中にする。
+	 *
+	 * 3案の3つ目が選ばれたときに呼ばれる。
+	 * 新しく作らないので、同じ内容のタスクが2件並ぶことがない。
+	 *
+	 * 完了のヒントは、そのタスクが持っていないときだけ入れる。
+	 * 本人が書いたものを、AIが書いたもので黙って上書きしないため。
+	 * 消えたことに気づけるのは本人だけで、戻す手段が無い。
+	 *
+	 * @param taskId 進行中にするタスクのID
+	 * @param detail AIが書いた完了のヒント
+	 */
+	@Transactional
+	public void startExisting(Long taskId, String detail) {
+
+		Task task = taskRepository.findById(taskId)
+				.orElseThrow(() -> new IllegalArgumentException("タスクが見つかりません: " + taskId));
+
+		task.setStatus(TaskStatus.DOING);
+
+		if (task.getDetail() == null || task.getDetail().isEmpty()) {
+			task.setDetail(detail);
+		}
+
+		taskRepository.save(task);
+	}
 }

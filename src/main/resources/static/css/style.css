@@ -1178,3 +1178,23 @@ body {
   0%, 60%, 100% { opacity: 0.25; }
   30%           { opacity: 1; }
 }
+.card-tag {
+  padding: 4px 12px;
+  border: 2px solid #000;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* 新しい案。目を引くほうに色を付ける */
+.card-tag-new {
+  background: #7ED321;
+  color: #fff;
+}
+
+/* リストにあったもの。既に知っているものなので、
+   枠は同じでも中は白のままにして下がらせる */
+.card-tag-list {
+  background: #fff;
+  color: #999;
+}

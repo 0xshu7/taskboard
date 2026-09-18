@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Random;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,11 +37,11 @@ import com.example.taskboard.ai.ProposalGenerator;
 import com.example.taskboard.domain.ProposalCard;
 import com.example.taskboard.domain.ProposalSet;
 import com.example.taskboard.domain.ProposalStatus;
+import com.example.taskboard.domain.Task;
 import com.example.taskboard.logic.Situation;
 import com.example.taskboard.logic.SituationJudge;
 import com.example.taskboard.repository.ProposalCardRepository;
 import com.example.taskboard.repository.ProposalSetRepository;
-
 /**
  * スタートを押してから、3案を出し、選ぶまでを受け持つ。
  *
@@ -86,7 +87,13 @@ public class ProposalService {
 
 	/** AI に送る文章を組み立てる */
 	private final PromptBuilder promptBuilder;
-
+	/**
+	 * 3つ目に使うタスクを選ぶためのくじ引き。
+	 *
+	 * 呼ぶたびに new すると、短い間に呼ばれたとき同じ値が続くことがある。
+	 * 1つ作って使い回す。
+	 */
+	private final Random random = new Random();
 	/**
 	 * 3案を作る係。
 	 *
@@ -160,8 +167,18 @@ public class ProposalService {
 		Long userId = userService.currentId();
 
 		Situation situation = situationJudge.judge(LocalTime.now());
-		String prompt = promptBuilder.buildProposal(situation, taskService.findActive());
 
+		// 3つ目の案にそのまま使うタスクを、手持ちから1件だけ選ぶ。
+		//
+		// 押すたびに新しいタスクが増え続けるのを防ぎ、
+		// 登録したまま止まっているものを掘り起こすため。
+		//
+		// 選び方はくじ引き。締切順などにすると、同じものばかり出て埋もれ直す。
+		// 1件も無ければ null で、そのときは3案とも新しい案になる。
+		List<Task> activeTasks = taskService.findActive();
+		Task pickedTask = pickOne(activeTasks);
+
+		String prompt = promptBuilder.buildProposal(situation, activeTasks, pickedTask);
 		List<ProposalCard> cards;
 		String source;
 
@@ -196,6 +213,19 @@ public class ProposalService {
 		for (ProposalCard card : cards) {
 			card.setProposalSetId(set.getId());
 			card.setPosition(position);
+
+			// 3枚目だけ、元になったタスクを覚えておく。
+			// 選ばれたとき、新しく作らずにそのタスクを進行中にするため。
+			//
+			// 本物のAIのときだけ紐づける。
+			// モックもフォールバックもプロンプトを読まないので、
+			// 指定したタスクとは無関係な内容を返す。
+			// それを紐づけると、関係のないヒントが本人のタスクに入ってしまう。
+			if (position == 3 && pickedTask != null && "AI".equals(source)) {
+				card.setSourceTaskId(pickedTask.getId());
+				card.setTitle(pickedTask.getTitle());
+			}
+
 			cardRepository.save(card);
 			position++;
 		}
@@ -254,8 +284,14 @@ public class ProposalService {
 		set.setDecidedAt(LocalDateTime.now());
 		setRepository.save(set);
 
-		// タスクとして登録する
-		taskService.createFromCard(card);
+		// タスクにする。
+		// 元になったタスクがあるなら、新しく作らずにそれを進行中にする。
+		// ここで新しく作ると、同じ内容のタスクが2件並ぶことになる。
+		if (card.getSourceTaskId() == null) {
+			taskService.createFromCard(card);
+		} else {
+			taskService.startExisting(card.getSourceTaskId(), card.getDetail());
+		}
 
 		printHesitation(set);
 	}
@@ -304,5 +340,25 @@ public class ProposalService {
 		long seconds = Duration.between(set.getRequestedAt(), set.getDecidedAt()).getSeconds();
 
 		System.out.println("### 迷い時間 = " + seconds + "秒 / 結果 = " + set.getStatus());
+	}
+	/**
+	 * 未完了のタスクから1件、ランダムに選ぶ。
+	 *
+	 * 1件も無ければ null を返す。
+	 * 呼び出し側は null のときプロンプトの欄ごと出さないので、
+	 * ここで空のリストを返す形にはしていない。
+	 *
+	 * @param tasks 未完了のタスク
+	 * @return 選ばれた1件。無ければ null
+	 */
+	private Task pickOne(List<Task> tasks) {
+
+		if (tasks.isEmpty()) {
+			return null;
+		}
+
+		// nextInt(n) は 0 以上 n 未満の整数を返す。
+		// リストの番号は0から始まるので、そのまま添字に使える
+		return tasks.get(random.nextInt(tasks.size()));
 	}
 }
