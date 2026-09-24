@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- ログイン画面・スタート画面（大きく中央） -->
+<h1 th:fragment="appTitleLarge" class="app-title app-title--large">
+  <svg th:replace="~{fragments/logo :: catMark}"></svg>
+  <span>さんたく</span>
+</h1>
+
+<!-- タスク一覧・設定・提案画面（横並び） -->
+<h1 th:fragment="appTitle" class="app-title">
+  <svg th:replace="~{fragments/logo :: catMark}"></svg>
+  <span>さんたく</span>
+</h1>
+
+<svg th:fragment="catMark" viewBox="0 0 124 118" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <g stroke-width="5" stroke-linecap="round">
+    <path d="M14 46 L6 42" stroke="#FFB020"/>
+    <path d="M18 32 L11 26" stroke="#FFB020"/>
+    <path d="M110 46 L118 42" stroke="#FFB020"/>
+    <path d="M106 32 L113 26" stroke="#FFB020"/>
+  </g>
+  <g fill="#FFFFFF" stroke="#1C1C1E" stroke-width="4" stroke-linejoin="round">
+    <path d="M41 28 L37 8 L56 18 Z"/>
+    <path d="M83 28 L87 8 L68 18 Z"/>
+    <ellipse cx="62" cy="44" rx="27" ry="24"/>
+  </g>
+  <g fill="#FFB3C8">
+    <ellipse cx="46" cy="50" rx="5.5" ry="3.5"/>
+    <ellipse cx="78" cy="50" rx="5.5" ry="3.5"/>
+  </g>
+  <g fill="#1C1C1E">
+    <circle cx="53" cy="41" r="3.2"/>
+    <circle cx="71" cy="41" r="3.2"/>
+    <circle cx="62" cy="48" r="2.2"/>
+  </g>
+  <path d="M56 52 Q59 56 62 52 Q65 56 68 52" fill="none" stroke="#1C1C1E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <g stroke="#1C1C1E" stroke-width="4" stroke-linejoin="round">
+    <rect x="0" y="0" width="34" height="46" rx="7" fill="#FF2D8A" transform="translate(16,62) rotate(-9)"/>
+    <rect x="0" y="0" width="34" height="46" rx="7" fill="#7ED321" transform="translate(45,58) rotate(-1)"/>
+    <rect x="0" y="0" width="34" height="46" rx="7" fill="#00C2D1" transform="translate(73,63) rotate(9)"/>
+  </g>
+  <g fill="#FFFFFF" stroke="#1C1C1E" stroke-width="4">
+    <circle cx="24" cy="66" r="7.5"/>
+    <circle cx="100" cy="68" r="7.5"/>
+  </g>
+</svg>
+
+</body>
+</html>

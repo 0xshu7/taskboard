@@ -528,16 +528,12 @@ body {
 /* 状態を持つだけの部品。見せないが、消してはいけない */
 .detail-check { display: none; }
 
-/* ▾ がある行は、タイトルを伸ばさない。
-   伸ばすと ▾ が右端まで飛んでいって、どの文字に付いているか分からなくなる。
-   :has() は「その中に～を持つもの」を指す */
-.task:has(.detail-toggle) .task-title { flex: 0 1 auto; }
+
 
 /* 押す場所。タイトルのすぐ右に、小さな四角として置く。
    margin-right: auto で、これより後ろのもの（締切・難易度・編集・✕）を右端に寄せる */
 .detail-toggle {
   flex: none;
-  margin-right: auto;
   width: 22px;
   height: 22px;
   display: inline-flex;
@@ -1228,4 +1224,93 @@ body {
 .card-tag-list {
   background: #fff;
   color: #999;
+}
+
+/* タイトルと▾の箱。
+   flex: 1 1 0 は「基準0から、残り幅を全部使う」という指定。
+   他の要素が先に幅を取るので、この箱がはみ出すことがない。
+
+   min-width: 0 が無いと、中身の幅より小さくならず、結局あふれる */
+.task-head {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-head .task-title {
+  min-width: 0;
+}
+
+.tabs {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ログイン画面の、名前の由来。
+   app-title のすぐ下に置く。主役は名前なので小さく */
+.app-sub {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-title svg {
+  width: auto;
+  height: 2em;
+  flex: 0 0 auto;
+  display: block;
+}
+
+.app-title--large {
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.app-title--large svg {
+  height: 88px;
+}
+
+.app-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;   /* ← 追加 */
+  gap: 10px;
+}
+
+.app-title--large {
+  font-size: 40px;   /* いま 36px くらい。まずここだけ */
+}
+
+.app-tagline {
+  font-size: 16px;   /* いま 14px */
+}
+
+.app-title--large {
+  gap: 4px;          /* 10px → 4px */
+}
+
+.app-title--large span {
+  line-height: 1;    /* ← これが効きます */
+  display: block;
+}
+
+.app-title {
+  font-size: 36px;   /* いま 34px くらい */
+}
+
+.app-title--large p,
+.app-title--large + p {
+  margin-top: 18px;
+  margin-bottom: 0;
 }

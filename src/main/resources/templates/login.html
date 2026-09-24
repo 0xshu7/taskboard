@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ログイン｜Task Board</title>
+  <title>さんたく</title>
   <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
 <body>
 
 <div class="container home">
 
-  <h1 class="app-title">Task Board</h1>
+	<div th:replace="~{fragments/logo :: appTitleLarge}"></div>
+
+	<!-- 名前の由来。初めて見た人に、何をするアプリか1行で伝わる -->
+	<p class="app-sub">3つの案から、ひとつ選ぶだけ。</p>
 
   <!--
     Google の同意画面へ送るURL。

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Task Board</title>
+  <title>さんたく</title>
   <link rel="stylesheet" th:href="@{/css/style.css}">
   <link rel="icon" th:href="@{/favicon.ico}" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" th:href="@{/icon-32.png}">
@@ -15,7 +15,7 @@
 <div class="container home">
 
   <header class="header">
-    <h1 class="app-title">Task Board</h1>
+    <div th:replace="~{fragments/logo :: appTitleLarge}"></div>
     <p class="tagline">迷っているより、まず実行。ほんの少しでも。</p>
   </header>
 

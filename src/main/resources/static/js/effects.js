@@ -169,7 +169,7 @@ function playThenSubmit(form, soundName, waitMs, waitingLabel) {
 				button.disabled = true;          // 二重に押されないように
 				button.textContent = waitingLabel;
 			}
-			showWaiting(waitingLabel); 	
+			showWaiting(waitingLabel);
 		}
 
 		setTimeout(function () {
@@ -194,11 +194,15 @@ document.addEventListener("DOMContentLoaded", function () {
 		playThenSubmit(form, "start", 250);
 	});
 
-	// --- 「別の話題にする」 ---
-	// ここも作り直すので待つ
+	// --- 「別の案を見る」 ---
+	// ここもAIを呼び直すので待つ。
+	//
+	// 以前ここに startForm を渡していた。提案画面には .start-form が無いので
+	// null になり、この行で例外が出て、ここから下が動かなくなっていた。
+	// 待ち時間の表示が出なかったのも、状態ボタンが結びつかなかったのも同じ原因。
 	const retopicForm = document.querySelector(".retopic-form");
 	if (retopicForm) {
-		playThenSubmit(startForm, "start", 250, "AIが考えています…");
+		playThenSubmit(retopicForm, "start", 250, "AIが考えています…");
 	}
 
 	// --- 状態のボタン ---

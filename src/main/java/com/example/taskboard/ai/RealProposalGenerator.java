@@ -92,6 +92,18 @@ public class RealProposalGenerator implements ProposalGenerator {
 	private static final String ENDPOINT =
 			"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent";
 
+	/**
+	 * 応答のばらけ具合。プロンプト設計書 1.2 の初期値。
+	 *
+	 * 提案は毎回少し違うものが欲しいので 0.8 にしている。
+	 * 3案が似る、毎回同じものが出る、というときは 0.9〜1.0 に上げる。
+	 * 逆に、指示を無視して勝手なものを作るときは下げる。
+	 *
+	 * 設計書に書いてあったのに、長いあいだ指定し忘れていた。
+	 * 指定しないと Gemini の既定値になる。
+	 */
+	private static final double TEMPERATURE = 0.8;
+
 	/** 外部へ通信する道具 */
 	private final RestClient rest = RestClient.create();
 
@@ -137,6 +149,7 @@ public class RealProposalGenerator implements ProposalGenerator {
 	 * contents         … 送る文章そのもの
 	 * responseMimeType … JSONで返すよう指定する
 	 * responseSchema   … その JSON の形を固定する
+	 * temperature      … 応答のばらけ具合（0.8）
 	 * thinkingLevel    … 考える深さ。low にすると速くなる
 	 * maxOutputTokens  … 返す長さの上限
 	 *
@@ -168,6 +181,7 @@ public class RealProposalGenerator implements ProposalGenerator {
 				"generationConfig", Map.of(
 						"responseMimeType", "application/json",
 						"responseSchema", schema(),
+						"temperature", TEMPERATURE,
 						"thinkingConfig", Map.of("thinkingLevel", "low"),
 						"maxOutputTokens", 800));
 
@@ -257,6 +271,16 @@ public class RealProposalGenerator implements ProposalGenerator {
 	 * いま7組なのでまだ余裕があるが、これ以上増やすときは
 	 * Map.ofEntries に変える必要がある。
 	 *
+	 * 【description はプロンプトより強い】
+	 *
+	 * detail に付けた description が「終わり：」のままだったとき、
+	 * プロンプト側を「おわりの目安:」に変えても、返ってくるのは「終わり：」だった。
+	 * 項目のすぐ隣に書いてある説明のほうが、離れたところにある文章より効く。
+	 *
+	 * 逆に言えば、プロンプトで言うことを聞かない項目があるときは、
+	 * ここに一行書くのが早い。ただし、プロンプトと食い違うことを書くと
+	 * 今回のように、直したはずのものが直らない。両方そろえること。
+	 *
 	 * @return 型定義
 	 */
 	private Map<String, Object> schema() {
@@ -275,7 +299,7 @@ public class RealProposalGenerator implements ProposalGenerator {
 						"reason",           Map.of("type", "STRING"),
 						"detail",           Map.of("type", "STRING",
 						                           "description",
-						                           "手順を3行、最後の1行は必ず「終わり：」で始める。改行(\\n)区切り")),
+						                           "「✓」で始まる手順を3行、最後の1行は「おわりの目安: 」で始める（✓は付けない）。改行(\\n)区切り")),
 
 				// 全部必須にする。1つでも欠けたら AI 側でやり直してくれる
 				"required", List.of("title", "category", "granularity",

@@ -2,8 +2,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/taskboard?serverTimezone=Asia/Tokyo&characterEncoding=utf8
     username: taskboard
-    password: taskboard
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    password: ${DB_PASSWORD:}
   jpa:
     hibernate:
       ddl-auto: update   # 設計が固まったら validate に変える

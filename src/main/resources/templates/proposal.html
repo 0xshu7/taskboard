@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Task Board</title>
+  <title>さんたく</title>
   <link rel="stylesheet" th:href="@{/css/style.css}">
   <link rel="icon" th:href="@{/favicon.ico}" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" th:href="@{/icon-32.png}">
@@ -15,6 +15,7 @@
 <div class="container proposals">
 
   <header class="header">
+	<div th:replace="~{fragments/logo :: appTitle}"></div>
     <h1 class="proposal-title">きょうはどれからはじめる？</h1>
 
     <!-- 選んだあと何が起きるかを、押す前に書いておく。

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>設定｜Task Board</title>
+<title>設定｜さんたく</title>
 
 <!-- CSRF の合言葉。JavaScript が fetch で送るときに、ここから読んでヘッダーに載せる -->
 <meta name="_csrf" th:content="${_csrf.token}">
@@ -25,7 +25,7 @@
 	<div class="container">
 
 		<header class="header">
-			<h1 class="app-title"><a th:href="@{/}">Task Board</a></h1>
+			<div th:replace="~{fragments/logo :: appTitle}"></div>
 		</header>
 
 		<!-- ===== 画面の行き来 =====

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Task Board</title>
+  <title>さんたく</title>
   <link rel="stylesheet" th:href="@{/css/style.css}">
   <link rel="icon" th:href="@{/favicon.ico}" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" th:href="@{/icon-32.png}">
@@ -18,16 +18,16 @@
 
   <!-- ===== 見出しと残りタスク数 ===== -->
   <header class="header">
-    <h1 class="app-title"><a th:href="@{/}">Task Board</a></h1>
+    <div th:replace="~{fragments/logo :: appTitle}"></div>
     <p class="remaining">
       残り <span class="remaining-num" id="remaining-num" th:text="${remaining}">0</span> 件
     </p>
   </header>
-  
+
   <!-- ===== 画面の行き来 ===== -->
   <nav class="tabs">
-  	<a class="tab" th:href="@{/}">🚀スタート</a>
-  	<a class="tab-gear" th:href="@{/settings}" title="設定">⚙</a>
+    <a class="tab" th:href="@{/}">🚀 スタート</a>
+    <a class="tab" th:href="@{/settings}">⚙ 設定</a>
   </nav>
 
   <!-- ===== 操作の結果メッセージ ===== -->
@@ -88,12 +88,20 @@
 	    </button>
 	  </form>
 
-	  <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
-
 	  <!-- 完了のヒントの開閉。
-	       チェックボックスは状態を持つだけで、画面には出さない -->
-	  <input class="detail-check" type="checkbox" th:id="'detail-' + ${task.id}">
-	  <label class="detail-toggle" th:for="'detail-' + ${task.id}" title="完了のヒント">▾</label>
+	       チェックボックスは状態を持つだけで、画面には出さない。
+	       おまかせ中のタスクは開いた状態で出す。
+	       いま動いているものの中身が畳まれていると、押したことを忘れる -->
+	  <input class="detail-check" type="checkbox" th:id="'detail-' + ${task.id}"
+	         th:checked="${task.autoCompleteAt != null}">
+
+	  <!-- タイトルと▾を1つの箱にまとめる。
+	       この箱が残り幅を全部使うので、締切・難易度・編集・削除の位置が動かない。
+	       まとめないと、タイトルが長いときに後ろの要素が次の行へ押し出される -->
+	  <div class="task-head">
+	    <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
+	    <label class="detail-toggle" th:for="'detail-' + ${task.id}" title="完了のヒント">▾</label>
+	  </div>
 
 	  <!-- 締切。今日より前なら「超過」として色を変える -->
 	  <span class="due"
@@ -162,7 +170,6 @@
 	  </form>
 
 	  <!-- 開いたときに出る中身。CSS の order で、この行の最後の段に落ちる -->
-	  <!-- 開いたときに出る中身。CSS の order で、この行の最後の段に落ちる -->
 	  <div class="task-detail-body">
 
 	    <div class="detail-head-row">
@@ -193,12 +200,6 @@
 	       th:if="${task.detail == null or task.detail.isEmpty()}">
 	      ヒントはまだありません。「✒️」から、手順や終わりの目安を書いておけます。
 	    </p>
-		<!-- 完了のヒントの開閉。
-		     チェックボックスは状態を持つだけで、画面には出さない。
-		     おまかせ中のタスクは開いた状態で出す。
-		     いま動いているものの中身が畳まれていると、押したことを忘れる -->
-		<input class="detail-check" type="checkbox" th:id="'detail-' + ${task.id}"
-		       th:checked="${task.autoCompleteAt != null}">
 	  </div>
 	</li>
 
@@ -220,11 +221,13 @@
 		    <button type="submit" class="tag tag-DONE">完了</button>
 		  </form>
 
-		  <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
-
 		  <!-- 終わったあとも、どう進めたかを見返せるようにしておく -->
 		  <input class="detail-check" type="checkbox" th:id="'detail-' + ${task.id}">
-		  <label class="detail-toggle" th:for="'detail-' + ${task.id}" title="完了のヒント">▾</label>
+
+		  <div class="task-head">
+		    <p class="task-title" th:text="${task.title}">タスクのタイトル</p>
+		    <label class="detail-toggle" th:for="'detail-' + ${task.id}" title="完了のヒント">▾</label>
+		  </div>
 
 		  <span class="badge"
 		        th:classappend="'badge-' + ${task.difficulty != null ? task.difficulty : 'MID'}"
