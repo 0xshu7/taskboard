@@ -16,16 +16,17 @@
     12. 提案画面（3択）
     13. 待っているあいだの表示
     14. 設定画面
-    15. エラー画面
-    16. 花吹雪
-    17. 動きを減らす設定
+    15. 最初の3問
+    16. エラー画面
+    17. 花吹雪
+    18. 動きを減らす設定
 
    同じ見た目のものは、まとめて1か所で指定する。
    別々に書くと、片方だけ直して食い違う。
    同じセレクタを2回書くと、後ろが勝つ指定と前が残る指定が混ざる。
    エラーは出ないので、重複は必ず消す。
 
-   【この版で直したこと】
+   【前の版で直したこと】
 
    上のルールを、自分で破っていた。
    直したいところが出るたびにファイルの末尾へ足していった結果、
@@ -36,11 +37,23 @@
    困るのは読むときで、前の指定が生きているのか消されたのかが、
    最後まで読まないと分からない。直すのが怖いファイルになる。
 
-   使われていない指定も2つ残っていた。
-   　.volume-row       … 音量つまみをやめたときに消し忘れた
-   　text-decoration-thickness … 取り消し線をやめたのに、太さだけが残っていた
+   【この版で直したこと】
 
-   どちらも画面には出ないので、気づく機会が無い。
+   同じことをまたやっていた。最初の3問を作ったときに、末尾へ足していった。
+
+   　.waiting-face                    2回（後ろで浮かぶ動きを足していた）
+   　@media (prefers-reduced-motion)  2回（中身が違うので、両方が生きていた）
+   　.profile-lead                    2回（下の余白が 24px と 8px で食い違う）
+   　.choices                         2回（中身は同じ）
+   　.choice                          2回。しかも作りが違う
+
+   .choice の2つは、ラジオボタンを包むラベル版と、送信ボタン版だった。
+   画面はボタンで作ってあるので、ラベル版はどこからも当たらない死んだ指定。
+   　.choice input / :has(input:checked) / :has(input:focus-visible)
+   これらをまとめて消した。
+
+   使わなくなった .btn-quiet も消した。
+   ログアウトを中央に大きく置いて区別したので、色で分ける案そのものが不要になった。
    ========================================================================== */
 
 
@@ -1126,9 +1139,20 @@ body {
   text-align: center;
 }
 
+/* 顔。ゆっくり浮いて、ゆっくり戻る。
+   絵文字は文字なので、そのままでは transform が効かない。
+   inline-block にすると箱として扱われ、動かせるようになる */
 .waiting-face {
   font-size: 48px;
   line-height: 1;
+  display: inline-block;
+  animation: waiting-float 2.4s ease-in-out infinite;
+}
+
+/* 点の点滅（1.2秒）とずらしてあるので、2つの動きが揃って見えない */
+@keyframes waiting-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
 }
 
 .waiting-text {
@@ -1252,9 +1276,8 @@ body {
   cursor: pointer;
 }
 
-/* --- ログアウト ---
-   画面のいちばん下に、右寄せで置く。
-   ふだん押すものではないので、背景は塗らず、枠と文字だけピンクにする */
+/* --- 小さいボタン（やりなおす） ---
+   説明文の右端に置く。背景は塗らず、枠と文字だけピンクにする */
 
 .logout-form {
   margin-top: 14px;
@@ -1276,6 +1299,44 @@ body {
   background: #fff0f6;
 }
 
+/* --- いちばん下のログアウト ---
+
+   中央に、スタートと同じ見た目で置く。
+   右端に小さく置いていたときは「やりなおす」と見分けがつかなかった。
+   色ではなく、位置と大きさで区別する。
+
+   上の .btn-logout を全部上書きしているので、
+   枠・背景・文字色・大きさを一から書き直している */
+
+.logout-bottom {
+  display: flex;
+  justify-content: center;
+  margin-top: 40px;
+}
+
+.logout-bottom .btn-logout {
+  width: 100%;
+  max-width: 256px;
+  padding: 13px;
+  border: 3px solid var(--ink);
+  border-radius: var(--round);
+  background: var(--pink);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  box-shadow: var(--shadow);
+}
+
+.logout-bottom .btn-logout:hover {
+  background: var(--pink);   /* 小さい版の薄ピンクを打ち消す */
+}
+
+.logout-bottom .btn-logout:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
 .links {
   margin-top: 24px;
   display: flex;
@@ -1285,143 +1346,11 @@ body {
 
 
 /* ==========================================================================
-   15. エラー画面
+   15. 最初の3問
+
+   1問ずつ3画面。9個まとめて出すと、3択のアプリらしくない。
+   選択肢そのものが送信ボタンになっている。
    ========================================================================== */
-
-.error-code {
-  font-size: 64px;
-  font-weight: 900;
-  text-align: center;
-  color: var(--pink);
-  margin: 32px 0 8px;
-}
-
-.error-text {
-  text-align: center;
-  color: var(--muted);
-  margin: 0 0 32px;
-}
-
-
-/* ==========================================================================
-   16. 花吹雪
-   ========================================================================== */
-
-/* 画面全体に重ねる透明な板。クリックは下に素通りさせる */
-.confetti-canvas {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 9999;
-}
-
-
-/* ==========================================================================
-   17. 動きを減らす設定
-
-   動きが苦手な人はブラウザ側で設定できる。それを尊重して止める。
-   ========================================================================== */
-
-@media (prefers-reduced-motion: reduce) {
-  .message,
-  .detail-toggle,
-  .waiting-dots span {
-    animation: none;
-    transition: none;
-  }
-}
-
-.waiting-face {
-  font-size: 48px;
-  line-height: 1;
-
-  /* 絵文字は文字なので、そのままでは transform が効かない。
-     inline-block にすると箱として扱われ、動かせるようになる */
-  display: inline-block;
-
-  animation: waiting-float 2.4s ease-in-out infinite;
-}
-
-/* ゆっくり浮いて、ゆっくり戻る。
-   点の点滅（1.2秒）とずらしてあるので、2つの動きが揃って見えない */
-@keyframes waiting-float {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-8px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .message,
-  .detail-toggle,
-  .waiting-dots span,
-  .waiting-face {
-    animation: none;
-    transition: none;
-  }
-}
-
-/* --- 最初の3問 --- */
-
-.profile-lead {
-  margin: 4px 0 24px;
-  font-size: 18px;
-  text-align: center;
-  line-height: 1.7;
-}
-
-/* 選択肢は縦に3つ。提案画面の3枚と動きを揃える。
-   横に並べると「締切が近いものから」のような長いラベルで高さがばらつく */
-.choices {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-/* ラベルでラジオボタンを包むと、どこを押しても選べる。
-   .field label の display:block と margin を打ち消すため、ここで指定し直す */
-.choice {
-  display: block;
-  margin: 0;
-  padding: 14px;
-  border: 3px solid var(--ink);
-  border-radius: var(--round);
-  background: #fff;
-  font-size: 16px;
-  font-weight: 800;
-  text-align: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-}
-
-/* ラジオボタン本体は見せない。
-   display:none にすると押せなくなる環境があるので、透明にして重ねる */
-.choice input {
-  position: absolute;
-  width: 0;
-  height: 0;
-  opacity: 0;
-}
-
-/* 選ばれたもの。:has は「中にこれを持つ要素」を指す */
-.choice:has(input:checked) {
-  background: var(--pink);
-  color: #fff;
-}
-
-/* キーボードで移動してきたときに、どこにいるか分かるようにする */
-.choice:has(input:focus-visible) {
-  box-shadow: 0 0 0 4px rgba(240, 51, 140, .18);
-}
-
-.choice:active {
-  transform: translate(3px, 3px);
-  box-shadow: none;
-}
-
-/* --- 最初の3問 --- */
 
 .profile-lead {
   margin: 4px 0 8px;
@@ -1439,12 +1368,21 @@ body {
   text-align: center;
 }
 
-/* 選択肢は縦に3つ。提案画面の3枚と動きを揃える */
+/* 選択肢は縦に3つ。提案画面の3枚と動きを揃える。
+   横に並べると「締切が近いものから」のような長いラベルで高さがばらつく */
 .choices {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-bottom: 8px;
+}
+
+/* 3問目だけ、選択肢ごとにフォームを分けている。
+   effects.js が送信を止めて form.submit() で送り直すため、
+   押されたボタンの name と value が失われるので、隠し項目で持たせている。
+   フォームが余計な余白を作らないようにする */
+.choices form {
+  margin: 0;
 }
 
 /* 選択肢そのものが送信ボタン。
@@ -1469,29 +1407,66 @@ body {
   background: #fff0f6;
 }
 
+/* キーボードで移動してきたときに、どこにいるか分かるようにする */
+.choice:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(240, 51, 140, .18);
+}
+
 .choice:active {
   transform: translate(3px, 3px);
   box-shadow: none;
 }
 
-.choices form {
-  margin: 0;
-}
-/* 設定画面の控えめなボタン。
-   ログアウトと並ぶので、色で区別する。
-   押し間違えたときの重さが違う（質問3つ ／ 画面を出る） */
-.btn-quiet {
-	padding: 8px 18px;
-	border: 2px solid #b8b8b8;
-	border-radius: 999px;
-	background: #fff;
-	color: #666;
-	font-size: 0.9rem;
-	font-weight: 700;
-	cursor: pointer;
+
+/* ==========================================================================
+   16. エラー画面
+   ========================================================================== */
+
+.error-code {
+  font-size: 64px;
+  font-weight: 900;
+  text-align: center;
+  color: var(--pink);
+  margin: 32px 0 8px;
 }
 
-.btn-quiet:hover {
-	border-color: #888;
-	color: #333;
+.error-text {
+  text-align: center;
+  color: var(--muted);
+  margin: 0 0 32px;
+}
+
+
+/* ==========================================================================
+   17. 花吹雪
+   ========================================================================== */
+
+/* 画面全体に重ねる透明な板。クリックは下に素通りさせる */
+.confetti-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+
+/* ==========================================================================
+   18. 動きを減らす設定
+
+   動きが苦手な人はブラウザ側で設定できる。それを尊重して止める。
+   1か所にまとめる。2つに分かれていると、片方に足し忘れる。
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .message,
+  .detail-toggle,
+  .waiting-dots span,
+  .waiting-face {
+    animation: none;
+    transition: none;
+  }
 }

@@ -124,7 +124,7 @@
 
 			<form th:action="@{/profile/reset}" method="post" class="logout-form"
 			      onsubmit="return confirm('答えを消して、最初の質問からやりなおします。よろしいですか？')">
-								<button type="submit" class="btn-quiet">やりなおす</button>
+							<button type="submit" class="btn-logout">やりなおす</button>
 			</form>
 		</div>
 		<div class="field">
@@ -140,7 +140,7 @@
 			リンクにすると、他のサイトに <img src=".../logout"> を仕込むだけで
 			勝手にログアウトさせられるため
 		-->
-		<form th:action="@{/logout}" method="post" class="logout-form">
+		<form th:action="@{/logout}" method="post" class="logout-form logout-bottom">
 			<button type="submit" class="btn-logout">ログアウト</button>
 		</form>
 
