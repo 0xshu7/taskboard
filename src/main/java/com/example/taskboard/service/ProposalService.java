@@ -2,8 +2,7 @@ package com.example.taskboard.service;
 
 // ===== インポート =====
 // java.time.Duration      … 2つの時刻の差。迷い時間の計算に使う
-// java.time.LocalDateTime … 日付＋時刻。作った時刻・決めた時刻に使う
-// java.time.LocalTime     … 時刻だけ。いまが朝か夜かの判定に渡す
+// java.time.LocalDateTime … 日付＋時刻。作った時刻・決めた時刻、状況の判断に使う
 // java.util.List          … リストの型
 // java.util.Random        … くじ引き
 //
@@ -19,14 +18,13 @@ package com.example.taskboard.service;
 // ProposalSet            … 提案1セット
 // ProposalStatus         … セットの状態
 // NotFoundException      … 見つからないときの例外。404で返る
-// Situation              … いまの状況（時間帯と方針）
-// SituationJudge         … 時刻から状況を判断する
+// Situation              … いまの状況と、出す分野
+// SituationJudge         … 日時から状況と分野を決める
 // ProposalCardRepository … カードの出し入れ
 // ProposalSetRepository  … セットの出し入れ
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Random;
 
@@ -83,6 +81,16 @@ import com.example.taskboard.repository.ProposalSetRepository;
  * そして完了を渡さないと、AI は過去を知らないまま「新しい案」を作ることになり、
  * 前にやったものと同じ内容が「あたらしい」として出てくる。
  *
+ * 【分野はアプリが決める】
+ *
+ * 1件目と2件目にどの分野を出すかは SituationJudge が決め、
+ * プロンプトにはその結果だけを書く。
+ * 以前は「3案は違う話題に」とAIに頼んでいたが、守られないことがあった。
+ * アプリが決めてしまえば、守る／守らないの問題が消える。
+ *
+ * 「別の話題にする」を押したときは、前回の1件目の分野も外す。
+ * そうしないと、時刻が変わっていないので同じ分野が出続ける。
+ *
  * 【他人のものに触れないようにする】
  *
  * 1件を取り出す入口は2つだけにしてある。
@@ -116,7 +124,7 @@ public class ProposalService {
 	/** 提案カードの出し入れ */
 	private final ProposalCardRepository cardRepository;
 
-	/** 時刻から「いまどんな状況か」を判断する */
+	/** 日時から「いまどんな状況か」と「どの分野を出すか」を決める */
 	private final SituationJudge situationJudge;
 
 	/** AI に送る文章を組み立てる */
@@ -187,16 +195,6 @@ public class ProposalService {
 	}
 
 	/**
-	 * 3案を作って保存する。除外するものが無いとき用。
-	 *
-	 * @return 保存した3案のセット
-	 */
-	@Transactional
-	public ProposalSet generateSet() {
-		return generateSet(List.of());
-	}
-
-	/**
 	 * 3案を作って保存する。
 	 *
 	 * AI の呼び出しに失敗した場合は固定3案に切り替える。
@@ -205,15 +203,39 @@ public class ProposalService {
 	 * 応答にかかった時間と、どこから来た3案かをログに出す。
 	 * 速さの改善は、推測ではなく計測して判断する。
 	 *
-	 * @param excludeTitles 今回は出さないもの。「別の案を見る」のとき前回の3件が入る
+	 * 前回の3案を受け取るのは「別の話題にする」のときだけ。
+	 * そこから2つのことを決める。
+	 * 　・同じ題名を出さない（AI に渡す）
+	 * 　・同じ分野を出さない（SituationJudge に渡す）
+	 *
+	 * 題名の一覧ではなくカードのまま受け取っているのは、
+	 * 題名も分野も同じところから取れて、渡すものが1つで済むため。
+	 *
+	 * @param previousCards 前回の3案。スタートのときは空
 	 * @return 保存した3案のセット
 	 */
 	@Transactional
-	public ProposalSet generateSet(List<String> excludeTitles) {
+	public ProposalSet generateSet(List<ProposalCard> previousCards) {
 
 		Long userId = userService.currentId();
 
-		Situation situation = situationJudge.judge(LocalTime.now());
+		// 前回の1件目の分野。次はここを外す。
+		// 外すのは1つだけ。分野は3つしかないので、2つ外すと選ぶ余地が消える
+		String avoidCategory = previousCards.isEmpty()
+				? null
+				: previousCards.get(0).getCategory();
+
+		List<String> excludeTitles = previousCards.stream()
+				.map(ProposalCard::getTitle)
+				.toList();
+
+		// 日時を渡すのは、時間帯だけでなく曜日も見るため。
+		//
+		// 2つ目と3つ目は初回の3択の答え（主な用途・集中時間）。
+		// まだ質問画面が無いので null を渡している。
+		// null のときは、分野は時間帯と曜日だけで決まり、2件目は20〜60分になる。
+		Situation situation = situationJudge.judge(
+				LocalDateTime.now(), null, null, avoidCategory);
 
 		// 3つ目の案にそのまま使うタスクを、手持ちから1件だけ選ぶ。
 		//
@@ -423,7 +445,9 @@ public class ProposalService {
 	 * 閉じたセットも記録として残す。
 	 * 何が選ばれなかったかは、提案を良くするための手がかりになる。
 	 *
-	 * 閉じる前に、いま画面に出ている3件の title を控えて次へ渡す。
+	 * 閉じる前に、いま画面に出ている3枚をそのまま次へ渡す。
+	 * 題名も分野もそこから取れるので、渡すものは1つで済む。
+	 *
 	 * 控えずに呼び直すと、同じ材料・同じ指示で呼ぶことになるので、
 	 * 似たものが返ってきて当然だった。
 	 *
@@ -437,9 +461,7 @@ public class ProposalService {
 		ProposalSet set = findSet(setId);
 
 		// findCards は中で findSet を通るので、ここでも所有者は確かめられている
-		List<String> shown = findCards(setId).stream()
-				.map(ProposalCard::getTitle)
-				.toList();
+		List<ProposalCard> shown = findCards(setId);
 
 		set.setStatus(ProposalStatus.RETOPIC);
 		set.setDecidedAt(LocalDateTime.now());
