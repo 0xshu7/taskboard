@@ -64,7 +64,7 @@ public class ProposalCard {
 	/** 種類の上限 */
 	private static final int CATEGORY_MAX = 30;
 
-	/** 手順と終わりの線の上限 */
+	/** 手順と終わりの目安の上限 */
 	private static final int DETAIL_MAX = 300;
 
 	/** 勧める理由の上限 */
@@ -98,19 +98,25 @@ public class ProposalCard {
 	 * カードの見出し。選ぶときに読む文。
 	 *
 	 * detail の要約である必要はない。何の案かが一目で分かる短さを優先する。
-	 * 「〇〇として、△△する」の形で、頭に時間帯の言葉が入る。
+	 * 「前置き＋やること」の形で、頭に時間帯の言葉が入る。
 	 */
 	@Column(nullable = false, length = TITLE_MAX)
 	private String title;
 
-	/** 生活 / 勉強 / 食事 / 休日 など。どんな種類の案かを表す */
+	/**
+	 * どんな分野の案か。べんきょう / せいかつ / リラックス。
+	 *
+	 * 1枚目と2枚目は SituationJudge が決めたものがそのまま入る。
+	 * 3枚目は既存タスクなので、AI が内容から判断する。
+	 */
 	@Column(length = CATEGORY_MAX)
 	private String category;
 
 	/**
-	 * 選んだあとに見る、具体的な手順と終わりの線。
+	 * 選んだあとに見る、具体的な手順と終わりの目安。
 	 *
-	 * 改行区切りの1本の文字列で、最後の行は必ず「終わり：」で始まる。
+	 * 改行区切りの1本の文字列で、「✓」で始まる行が3つ、
+	 * 最後の行は「おわりの目安: 」で始まる。
 	 * その状態になったら本人の判断を待たずに終わり、と言い切れる文にする。
 	 *
 	 * 配列で持つとテーブルがもう1つ必要になるため、1本の文字列にして
@@ -171,6 +177,24 @@ public class ProposalCard {
 	@Column(name = "source_task_id")
 	private Long sourceTaskId;
 
+	/**
+	 * このカードから動き出したタスクのID。選ばれるまでは null。
+	 *
+	 * sourceTaskId とは向きが違う。
+	 * 　sourceTaskId … 提案を作るときに「この既存タスクを使った」
+	 * 　resultTaskId … 選ばれたときに「このタスクになった」
+	 *
+	 * 新しい案なら作られたタスク、既存タスクを使った案ならそのタスクが入る。
+	 * どちらも同じ形で入るので、あとの集計で場合分けが要らない。
+	 *
+	 * これが無いと「選ばれて、実際に完了したか」を数えられない。
+	 * 選択だけを数えると、選びやすいだけの提案に寄ってしまう。
+	 * このアプリの目的は選ばせることではなく、動けることなので、
+	 * 完了まで追えるようにしておく。
+	 */
+	@Column(name = "result_task_id")
+	private Long resultTaskId;
+
 	// ===== メソッド（getter / setter） =====
 	// 中身を読み書きするだけ。計算や判断はここではしない。
 	// ただし、文字数の上限だけは setter で面倒を見ている。
@@ -223,30 +247,30 @@ public class ProposalCard {
 		this.title = truncate(title, TITLE_MAX);
 	}
 
-	/** 種類を返す */
+	/** 分野を返す */
 	public String getCategory() {
 		return category;
 	}
 
-	/** 種類を入れる。上限を超えたら切り詰める */
+	/** 分野を入れる。上限を超えたら切り詰める */
 	public void setCategory(String category) {
 		this.category = truncate(category, CATEGORY_MAX);
 	}
 
-	/** 手順と終わりの線を返す */
+	/** 手順と終わりの目安を返す */
 	public String getDetail() {
 		return detail;
 	}
 
 	/**
-	 * 手順と終わりの線を入れる。上限を超えたら切り詰める。
+	 * 手順と終わりの目安を入れる。上限を超えたら切り詰める。
 	 *
 	 * 超えたまま保存すると、列の上限に引っかかって例外で止まる。
 	 * 3案のうち1枚が長かっただけでスタート全体が失敗し、
 	 * 保存はフォールバックの外なので固定3案にも切り替わらない。
 	 *
 	 * 切れた文章が出るほうが、画面が出ないよりましだと判断した。
-	 * ただしこれは保険で、本来はプロンプト側で超えさせない（v1.6 で250字を指定）。
+	 * ただしこれは保険で、本来はプロンプト側で超えさせない（250字を指定）。
 	 */
 	public void setDetail(String detail) {
 		this.detail = truncate(detail, DETAIL_MAX);
@@ -310,6 +334,16 @@ public class ProposalCard {
 	/** 元になったタスクのIDを入れる */
 	public void setSourceTaskId(Long sourceTaskId) {
 		this.sourceTaskId = sourceTaskId;
+	}
+
+	/** このカードから動き出したタスクのIDを返す。選ばれるまでは null */
+	public Long getResultTaskId() {
+		return resultTaskId;
+	}
+
+	/** このカードから動き出したタスクのIDを入れる */
+	public void setResultTaskId(Long resultTaskId) {
+		this.resultTaskId = resultTaskId;
 	}
 
 	// ===== メソッド（同じカードかどうかの判定） =====

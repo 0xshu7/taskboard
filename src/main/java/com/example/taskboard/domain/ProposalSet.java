@@ -45,6 +45,11 @@ import jakarta.persistence.Table;
  *
  * source には AI / MOCK / FALLBACK のどれかが入る。
  * AIが何回失敗したかを、あとから数えられるようにするため。
+ *
+ * timeOfDay を持っているのは、あとで「時間帯ごとに何が選ばれたか」を
+ * 数えるため。requestedAt の時から計算もできるが、そうすると
+ * SituationJudge が持っている時間の区切りを SQL 側にも書くことになる。
+ * 片方だけ変えたときに、静かに食い違う。
  */
 
 // ===== アノテーション =====
@@ -87,6 +92,18 @@ public class ProposalSet {
 	private LocalDateTime decidedAt;
 
 	/**
+	 * このとき SituationJudge が決めた時間帯。朝 / 昼 / 夜 / 深夜。
+	 *
+	 * 集計のために持っている。
+	 * 「朝はどの分野が選ばれやすいか」を数えるのに要る。
+	 *
+	 * 時刻から計算せずに保存するのは、時間の区切りの判断を
+	 * SituationJudge 1か所に閉じ込めておくため。
+	 */
+	@Column(name = "time_of_day", length = 10)
+	private String timeOfDay;
+
+	/**
 	 * どんな出し方をしたか。いまは NORMAL だけ。
 	 *
 	 * 提案の出し方を増やしたときに、あとから区別できるようにしてある。
@@ -118,7 +135,7 @@ public class ProposalSet {
 	/**
 	 * AIへ送った文章そのもの。
 	 *
-	 * 先頭にプロンプトの版（# prompt v1.6）が書き込まれているので、
+	 * 先頭にプロンプトの版（# prompt v5.1）が書き込まれているので、
 	 * 「どの版が、どんな3案を出したか」を突き合わせられる。
 	 *
 	 * ※ length は元のファイルの値をそのまま使うこと。
@@ -192,6 +209,16 @@ public class ProposalSet {
 	/** 決めた時刻を入れる */
 	public void setDecidedAt(LocalDateTime decidedAt) {
 		this.decidedAt = decidedAt;
+	}
+
+	/** このときの時間帯を返す */
+	public String getTimeOfDay() {
+		return timeOfDay;
+	}
+
+	/** このときの時間帯を入れる */
+	public void setTimeOfDay(String timeOfDay) {
+		this.timeOfDay = timeOfDay;
 	}
 
 	/** 出し方を返す。null のときは NORMAL として扱う */

@@ -91,6 +91,13 @@ import com.example.taskboard.repository.ProposalSetRepository;
  * 「別の話題にする」を押したときは、前回の1件目の分野も外す。
  * そうしないと、時刻が変わっていないので同じ分野が出続ける。
  *
+ * 【記録】
+ *
+ * このときの時間帯を ProposalSet に、
+ * 選ばれたカードから生まれたタスクのIDを ProposalCard に保存している。
+ * あとで「時間帯ごとに、どの分野が出されて、選ばれて、実際に終わったか」を
+ * 数えるため。選択だけを数えると、選びやすいだけの提案に寄ってしまう。
+ *
  * 【他人のものに触れないようにする】
  *
  * 1件を取り出す入口は2つだけにしてある。
@@ -288,6 +295,7 @@ public class ProposalService {
 		set.setRequestedAt(LocalDateTime.now());
 		set.setStatus(ProposalStatus.OPEN);
 		set.setSource(source);
+		set.setTimeOfDay(situation.getTimeOfDay());
 		set.setPromptText(prompt);
 		setRepository.save(set);
 
@@ -408,6 +416,10 @@ public class ProposalService {
 	 * 選ばれなかった2枚も消さずに残す。
 	 * 「何を出して、何が選ばれなかったか」が、提案の質を測る材料になるため。
 	 *
+	 * できたタスクのIDをカードに控えている。
+	 * これが無いと「選ばれて、実際に完了したか」を数えられない。
+	 * 新しい案でも既存タスクでも同じ形で入るので、あとの集計で場合分けが要らない。
+	 *
 	 * @param setId  セットのID
 	 * @param cardId 選ばれたカードのID
 	 * @throws NotFoundException セットかカードが無いか、他人のものだったとき
@@ -420,21 +432,25 @@ public class ProposalService {
 
 		// 選ばれた印を付ける
 		card.setChosen(true);
+
+		// タスクにする。
+		// 元になったタスクがあるなら、新しく作らずにそれを進行中にする。
+		// ここで新しく作ると、同じ内容のタスクが2件並ぶことになる。
+		if (card.getSourceTaskId() == null) {
+			Task task = taskService.createFromCard(card);
+			card.setResultTaskId(task.getId());
+		} else {
+			taskService.startExisting(card.getSourceTaskId(), card.getDetail());
+			card.setResultTaskId(card.getSourceTaskId());
+		}
+
+		// 印と、できたタスクのIDを、まとめて1回で保存する
 		cardRepository.save(card);
 
 		// セットを決定済みにする。decidedAt が迷い時間の計算に使われる
 		set.setStatus(ProposalStatus.CHOSEN);
 		set.setDecidedAt(LocalDateTime.now());
 		setRepository.save(set);
-
-		// タスクにする。
-		// 元になったタスクがあるなら、新しく作らずにそれを進行中にする。
-		// ここで新しく作ると、同じ内容のタスクが2件並ぶことになる。
-		if (card.getSourceTaskId() == null) {
-			taskService.createFromCard(card);
-		} else {
-			taskService.startExisting(card.getSourceTaskId(), card.getDetail());
-		}
 
 		printHesitation(set);
 	}
