@@ -4,7 +4,9 @@ package com.example.taskboard.service;
 // java.time.Duration      … 2つの時刻の差。迷い時間の計算に使う
 // java.time.LocalDateTime … 日付＋時刻。作った時刻・決めた時刻、状況の判断に使う
 // java.util.Comparator    … 並べ替えの決まり。3件目の選び方に使う
+// java.util.HashMap       … 「見出し → 値」の組の実装。分野ごとの重みに使う
 // java.util.List          … リストの型
+// java.util.Map           … 「見出し → 値」の組の型
 // java.util.Random        … くじ引き
 //
 // 以下は Spring の部品。
@@ -29,7 +31,9 @@ package com.example.taskboard.service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import org.springframework.stereotype.Service;
@@ -107,12 +111,24 @@ import com.example.taskboard.repository.ProposalSetRepository;
  * 「別の話題にする」を押したときは、前回の1件目の分野も外す。
  * そうしないと、時刻が変わっていないので同じ分野が出続ける。
  *
- * 【記録】
+ * 【記録と、そこからの重み付け】
  *
  * このときの時間帯を ProposalSet に、
  * 選ばれたカードから生まれたタスクのIDを ProposalCard に保存している。
  * あとで「時間帯ごとに、どの分野が出されて、選ばれて、実際に終わったか」を
  * 数えるため。選択だけを数えると、選びやすいだけの提案に寄ってしまう。
+ *
+ * その記録を、次の提案に効かせている（categoryBonus）。
+ * 分野ごとの完了率を SituationJudge の点数に足すので、
+ * 終わらせている分野が出やすくなる。
+ *
+ * 数えるのは「質問に答えた時刻より後」だけ。
+ * 答えなおすと起点が動くので、そこで評価もやりなおる。
+ * 記録そのものは消さない。
+ * 「やりなおせます」という言葉と、実際の動きをそろえるため。
+ *
+ * これは機械学習ではない。数えて割って足すだけで、学習するモデルは無い。
+ * 多腕バンディットのいちばん単純な形にあたる。
  *
  * 【他人のものに触れないようにする】
  *
@@ -140,6 +156,25 @@ public class ProposalService {
 	 * 古いものが効きすぎて提案の幅が狭くなる。
 	 */
 	private static final int RECENT_DONE_LIMIT = 10;
+
+	/**
+	 * 完了率を出すときに分母へ足す数。
+	 *
+	 * 1回出して1回終わっただけの分野が「完了率100%」になって
+	 * 独占するのを防ぐため。
+	 * この値のおかげで、まだ出していない分野も (0+1)/(0+3) = 0.33 になり、
+	 * 3分野が同じ値で並ぶ。データが無いうちは差が出ないので、
+	 * 場合分けの if を書かずに済む。
+	 */
+	private static final double BONUS_DENOMINATOR = 3.0;
+
+	/**
+	 * 記録が1件も無いときに使う起点。
+	 *
+	 * profile_set_at の列を足す前に答えた利用者は、この値が空になる。
+	 * その場合は全期間を数える。
+	 */
+	private static final LocalDateTime EPOCH = LocalDateTime.of(2000, 1, 1, 0, 0);
 
 	/** 提案セットの出し入れ */
 	private final ProposalSetRepository setRepository;
@@ -256,8 +291,11 @@ public class ProposalService {
 
 		// 日時を渡すのは、時間帯だけでなく曜日も見るため。
 		// 未回答のときは null が渡り、分野は時間帯と曜日だけで決まる。
+		//
+		// 最後の引数が、記録から出した分野ごとの重み。
 		Situation situation = situationJudge.judge(
-				LocalDateTime.now(), user.getMainUse(), user.getFocusLevel(), avoidCategory);
+				LocalDateTime.now(), user.getMainUse(), user.getFocusLevel(),
+				avoidCategory, categoryBonus(user));
 
 		// 3つ目の案にそのまま使うタスクを、手持ちから1件だけ選ぶ。
 		//
@@ -295,7 +333,7 @@ public class ProposalService {
 
 		} catch (RuntimeException e) {
 			System.out.println("### AI 失敗のためフォールバック: " + e.getMessage());
-			cards = FallbackCards.create();
+			cards = FallbackCards.create(situation, pickedTask);
 			source = "FALLBACK";
 		}
 
@@ -323,11 +361,14 @@ public class ProposalService {
 			// 3枚目だけ、元になったタスクを覚えておく。
 			// 選ばれたとき、新しく作らずにそのタスクを進行中にするため。
 			//
-			// 本物のAIのときだけ紐づける。
-			// モックもフォールバックもプロンプトを読まないので、
-			// 指定したタスクとは無関係な内容を返す。
-			// それを紐づけると、関係のないヒントが本人のタスクに入ってしまう。
-			if (position == 3 && pickedTask != null && "AI".equals(source)) {
+			// 除くのはモックだけ。
+			// モックは状況も指定タスクも受け取らないので、無関係な3枚目を返す。
+			// それに題名を貼ると、中身とタイトルが食い違う。
+			//
+			// フォールバックは、指定タスクをそのまま3枚目に使うようになったので
+			// 紐づけてよい。紐づけないと、選んだときに同じ題名のタスクが
+			// もう1件できてしまう。
+			if (position == 3 && pickedTask != null && !"MOCK".equals(source)) {
 				card.setSourceTaskId(pickedTask.getId());
 				card.setTitle(pickedTask.getTitle());
 			}
@@ -503,6 +544,50 @@ public class ProposalService {
 	}
 
 	// ===== メソッド（内部で使うもの） =====
+
+	/**
+	 * 分野ごとの完了率を出す。SituationJudge の点数に足される。
+	 *
+	 * 数え方は「(終わった数 + 1) / (出した数 + 3)」。
+	 *
+	 * 分子と分母に足しているのは、1回出して1回終わっただけの分野が
+	 * 100% になって独占するのを防ぐため。
+	 * まだ出していない分野は (0+1)/(0+3) = 0.33 になり、3分野が同じ値で並ぶ。
+	 * つまりデータが無いうちは差が出ないので、場合分けが要らない。
+	 *
+	 * 数えるのは、質問に答えた時刻より後だけ。
+	 * 答えなおすと起点が動くので、そこで評価もやりなおる。
+	 * 記録そのものは消さないので、集計や振り返りには残る。
+	 *
+	 * 選ばれた数ではなく、終わった数を見ている。
+	 * 選択だけを報酬にすると、選びやすいだけの提案に寄ってしまい、
+	 * 楽そうなものばかり出て誰も動かない形になりうる。
+	 * このアプリの目的は選ばせることではなく、動けること。
+	 *
+	 * @param user いまの利用者
+	 * @return 分野ごとの重み。記録が無い分野は入らない
+	 */
+	private Map<String, Double> categoryBonus(User user) {
+
+		LocalDateTime since = user.getProfileSetAt() != null
+				? user.getProfileSetAt()
+				: EPOCH;
+
+		Map<String, Double> bonus = new HashMap<>();
+
+		for (Object[] row : cardRepository.countByCategory(user.getId(), since)) {
+
+			String category = (String) row[0];
+			double shown = ((Number) row[1]).doubleValue();
+			double done = ((Number) row[2]).doubleValue();
+
+			bonus.put(category, (done + 1) / (shown + BONUS_DENOMINATOR));
+		}
+
+		System.out.println("### 分野の重み " + bonus);
+
+		return bonus;
+	}
 
 	/**
 	 * 迷い時間をコンソールに出す。

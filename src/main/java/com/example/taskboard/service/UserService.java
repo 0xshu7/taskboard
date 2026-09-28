@@ -146,9 +146,7 @@ public class UserService {
 
 		User user = current();
 
-		user.setMainUse(mainUse);
-		user.setOrderPref(orderPref);
-		user.setFocusLevel(focusLevel);
+		user.saveProfile(mainUse, orderPref, focusLevel);
 
 		userRepository.save(user);
 	}

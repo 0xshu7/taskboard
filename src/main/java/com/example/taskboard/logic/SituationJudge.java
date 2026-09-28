@@ -47,11 +47,43 @@ import org.springframework.stereotype.Component;
  * 基本は3分野とも 1.0。そこに足したり引いたりして、上位2つを取る。
  * 数字は最初の当て推量なので、偏るようなら直す。
  *
+ * 　主な用途   +1.5
+ * 　時間帯     朝  せいかつ +1.0 / リラックス +0.5
+ * 　　　　　　 昼  べんきょう +1.0
+ * 　　　　　　 夜  リラックス +1.0 / べんきょう +0.5
+ * 　　　　　　 深夜 リラックス +1.5 / べんきょう -1.0
+ * 　土日       リラックス +1.0
+ * 　別の話題   前回の1件目 -2.0
+ * 　完了率     0.0〜1.0（記録から。下記）
+ * 　ゆらぎ     0〜0.4
+ *
+ * 【完了率（記録からの重み）】
+ *
+ * 分野ごとに「出した数」と「実際に終わった数」を数え、
+ * (終わった数 + 1) / (出した数 + 3) を点数に足している。
+ * 計算そのものは ProposalService が行い、ここは受け取って足すだけ。
+ *
+ * 終わらせている分野が出やすくなる。
+ * 選ばれた数ではなく終わった数を見るのは、選択だけを報酬にすると
+ * 選びやすいだけの提案に寄ってしまうため。
+ *
+ * これは時間帯より弱く効く。
+ * 完了率の差は最大でも 0.86 程度で、時間帯の 1.0〜1.5 を覆さない。
+ * そのおかげで「合わない分野の出番は減るが、その分野が向いている
+ * 時間帯には出る」という形に収まり、分野が完全に消えることはない。
+ *
+ * 記録が1件も無い分野は 1/3（0.33）として扱う。
+ * 3分野とも同じ値になるので、使い始めは差が出ない。
+ *
  * 【ゆらぎ】
  *
  * 点数だけで決めると、同じ時間帯では毎回同じ組み合わせになる。
  * 0〜0.4 の幅でゆらぎを足して、僅差のときだけ入れ替わるようにしている。
  * 0.5 以上の差は覆らないので、時間帯や主な用途の意図は残る。
+ *
+ * ゆらぎは「ときどき別の分野も試す」役も兼ねている。
+ * 完了率が低い分野も、下駄と合わせて点数が 0 にならないので、
+ * 見捨てられて二度と出なくなることがない。
  *
  * 外部とのやりとりもデータベースへの保存も行わない。
  */
@@ -76,6 +108,15 @@ public class SituationJudge {
 	private static final double AVOID = -2.0;
 
 	/**
+	 * 記録が1件も無い分野の完了率。
+	 *
+	 * (0 + 1) / (0 + 3) と同じ値にしてある。
+	 * 数えた分野と数えていない分野を、同じ計算の上に並べるため。
+	 * 3分野とも記録が無ければ全部これになるので、差は出ない。
+	 */
+	private static final double NO_RECORD = 1.0 / 3.0;
+
+	/**
 	 * ゆらぎ用のくじ引き。
 	 * 呼ぶたびに new すると、短い間に呼ばれたとき同じ値が続くことがある。
 	 */
@@ -89,18 +130,24 @@ public class SituationJudge {
 	 * 引数で日時を受け取り、中で LocalDateTime.now() を呼んでいない。
 	 * 中で現在時刻を取ると、テストのときに時間帯を指定できなくなる。
 	 *
+	 * 完了率も引数で受け取る。
+	 * ここでデータベースを見に行くと、このクラスが記録の形を知ることになり、
+	 * テストでも数字を指定できなくなる。
+	 * 「数えるのは ProposalService、使うのはここ」と分けている。
+	 *
 	 * @param now           いまの日時
 	 * @param mainUse       主な用途。べんきょう / せいかつ / リラックス。未回答なら null
 	 * @param focusLevel    1回の集中時間。SHORT / MIDDLE / LONG。未回答なら null
 	 * @param avoidCategory 今回は外したい分野。「別の話題にする」のとき前回の1件目が入る
+	 * @param bonus         分野ごとの完了率。記録が無い分野は入っていなくてよい
 	 * @return 判断した状況
 	 */
 	public Situation judge(LocalDateTime now, String mainUse, String focusLevel,
-			String avoidCategory) {
+			String avoidCategory, Map<String, Double> bonus) {
 
 		String timeOfDay = timeOfDay(now.getHour());
 
-		List<String> ranked = ranked(timeOfDay, now.getDayOfWeek(), mainUse, avoidCategory);
+		List<String> ranked = ranked(timeOfDay, now.getDayOfWeek(), mainUse, avoidCategory, bonus);
 
 		return new Situation(
 				timeOfDay,
@@ -162,10 +209,11 @@ public class SituationJudge {
 	 * @param dayOfWeek     曜日
 	 * @param mainUse       主な用途。未回答なら null
 	 * @param avoidCategory 外したい分野。無ければ null
+	 * @param bonus         分野ごとの完了率
 	 * @return 点数の高い順に並んだ分野
 	 */
 	private List<String> ranked(String timeOfDay, DayOfWeek dayOfWeek,
-			String mainUse, String avoidCategory) {
+			String mainUse, String avoidCategory, Map<String, Double> bonus) {
 
 		Map<String, Double> score = new HashMap<>();
 
@@ -207,7 +255,15 @@ public class SituationJudge {
 			score.merge(avoidCategory, AVOID, Double::sum);
 		}
 
-		// ゆらぎ。僅差のときだけ入れ替わる
+		// 完了率。終わらせている分野を出やすくする。
+		// 記録が無い分野は 0.33 で並ぶので、使い始めは差にならない。
+		// 最大でも 1.0 なので、時間帯の重みを覆さない
+		for (String category : CATEGORIES) {
+			score.merge(category, bonus.getOrDefault(category, NO_RECORD), Double::sum);
+		}
+
+		// ゆらぎ。僅差のときだけ入れ替わる。
+		// 完了率の低い分野も点数が 0 にならないので、見捨てられずに時々出る
 		for (String category : CATEGORIES) {
 			score.merge(category, random.nextDouble() * JITTER, Double::sum);
 		}

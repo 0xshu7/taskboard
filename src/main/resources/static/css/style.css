@@ -1477,3 +1477,21 @@ body {
 .choices form {
   margin: 0;
 }
+/* 設定画面の控えめなボタン。
+   ログアウトと並ぶので、色で区別する。
+   押し間違えたときの重さが違う（質問3つ ／ 画面を出る） */
+.btn-quiet {
+	padding: 8px 18px;
+	border: 2px solid #b8b8b8;
+	border-radius: 999px;
+	background: #fff;
+	color: #666;
+	font-size: 0.9rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.btn-quiet:hover {
+	border-color: #888;
+	color: #333;
+}

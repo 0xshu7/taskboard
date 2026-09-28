@@ -67,7 +67,8 @@ public class MockProposalGenerator implements ProposalGenerator {
 	 */
 	@Override
 	public List<ProposalCard> generate(String prompt) {
-		return FallbackCards.create();
+		// モックは状況を持たない。FallbackCards 側が昼として扱う
+		return FallbackCards.create(null, null);
 	}
 
 	/**

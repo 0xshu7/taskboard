@@ -34,7 +34,7 @@ import jakarta.persistence.Table;
  * Googleに要求しているのは openid だけなので、受け取るのは sub という識別子1つ。
  * メールアドレスも名前も送られてこないし、保存もしない。
  *
- * 持っているのは8つ。
+ * 持っているのは9つ。
  *   id              … 内部の番号
  *   googleSub       … ログインした人を見分ける鍵
  *   createdAt       … いつ登録されたか
@@ -43,6 +43,7 @@ import jakarta.persistence.Table;
  *   mainUse         … 主な用途（最初の3択その1）
  *   orderPref       … すすめ方の好み（その2）
  *   focusLevel      … 1回の集中時間（その3）
+ *   profileSetAt    … その3つに答えた時刻（評価を数えはじめる起点）
  *
  * 【最初の3択について】
  *
@@ -62,6 +63,20 @@ import jakarta.persistence.Table;
  * 「答えたかどうか」の列は作らない。
  * 3つとも同時に保存するので、値が入っているかどうかで判断できる。
  * 別に持つと、片方だけ更新されて食い違う。
+ *
+ * 【profileSetAt が要る理由】
+ *
+ * 分野ごとの完了率を、次の提案の重みに使っている（ProposalService）。
+ * この時刻より後の記録だけを数える。
+ *
+ * これが無いと、答え直しても過去の記録が残り続け、
+ * 「やりなおせます」と書いてあるのに提案が変わらない、ということが起きる。
+ * 変えたのに体感が変わらないなら、そのボタンは壊れているのと同じ。
+ *
+ * 記録そのものは消さない。消すのは数えはじめる位置だけ。
+ * 自己申告（3つの答え）は変えられるが、やったこと（記録）は変わらない。
+ *
+ * 【設定について】
  *
  * 設定は「入れるか入れないか」だけにしてある。
  * 以前は音量を 0〜100 で持っていたが、効果音は一瞬鳴るだけで、
@@ -164,6 +179,16 @@ public class User {
 	@Column(name = "focus_level", length = 20)
 	private String focusLevel;
 
+	/**
+	 * 3つの答えを保存した時刻。分野ごとの完了率は、ここより後だけを数える。
+	 *
+	 * この列を足す前に答えた行では null になる。
+	 * そのときは全期間を数える（ProposalService 側で面倒を見ている）。
+	 * 記録は足した日から始まる。time_of_day と同じ。
+	 */
+	@Column(name = "profile_set_at")
+	private LocalDateTime profileSetAt;
+
 	// ===== コンストラクタ =====
 	// 自分でコンストラクタを1つでも書くと、Java が自動で用意する
 	// 「引数なしのコンストラクタ」が消える。JPA はそれを必要とするので、手で書き足している。
@@ -213,6 +238,27 @@ public class User {
 	// ===== メソッド（最初の3択） =====
 
 	/**
+	 * 最初の3問の答えを、まとめて入れる。
+	 *
+	 * 3つの setter を別々に呼ぶのではなく、ここに集めている。
+	 * 答えた時刻（profileSetAt）も同時に入れるため。
+	 *
+	 * 時刻を呼び出し側で入れる形にすると、入れ忘れたときに
+	 * 「答え直したのに評価がやりなおらない」という形で静かに壊れる。
+	 * 3つの答えと起点は必ず一緒に動くので、同じ場所で入れる。
+	 *
+	 * @param mainUse    主な用途
+	 * @param orderPref  すすめ方の好み
+	 * @param focusLevel 1回の集中時間
+	 */
+	public void saveProfile(String mainUse, String orderPref, String focusLevel) {
+		this.mainUse = mainUse;
+		this.orderPref = orderPref;
+		this.focusLevel = focusLevel;
+		this.profileSetAt = LocalDateTime.now();
+	}
+
+	/**
 	 * 最初の3問に答えているかを返す。
 	 *
 	 * 3つは同時に保存するので、1つ見れば足りる。
@@ -230,11 +276,15 @@ public class User {
 	/**
 	 * 最初の3問の答えを消す。
 	 *
-	 * 設定の「答え直す」から呼ばれる。
+	 * 設定の「やりなおせます」から呼ばれる。
 	 * 次にスタートを押したとき、質問から始まる。
 	 *
 	 * 3つまとめて消すのをここに置いているのは、
 	 * 1つ消し忘れると「半分だけ答えた」状態になるため。
+	 *
+	 * profileSetAt は触らない。
+	 * 答え直したときに saveProfile が新しい時刻を入れるので、
+	 * ここで消す必要がない。
 	 */
 	public void resetProfile() {
 		this.mainUse = null;
@@ -313,19 +363,9 @@ public class User {
 		return mainUse;
 	}
 
-	/** 主な用途を入れる */
-	public void setMainUse(String mainUse) {
-		this.mainUse = mainUse;
-	}
-
 	/** すすめ方の好みを返す。未回答なら null */
 	public String getOrderPref() {
 		return orderPref;
-	}
-
-	/** すすめ方の好みを入れる */
-	public void setOrderPref(String orderPref) {
-		this.orderPref = orderPref;
 	}
 
 	/** 1回の集中時間を返す。未回答なら null */
@@ -333,9 +373,14 @@ public class User {
 		return focusLevel;
 	}
 
-	/** 1回の集中時間を入れる */
-	public void setFocusLevel(String focusLevel) {
-		this.focusLevel = focusLevel;
+	/**
+	 * 3つの答えを保存した時刻を返す。
+	 *
+	 * 完了率を数えはじめる起点として使う。
+	 * この列を足す前に答えた行では null。
+	 */
+	public LocalDateTime getProfileSetAt() {
+		return profileSetAt;
 	}
 
 	// ===== メソッド（同じ利用者かどうかの判定） =====

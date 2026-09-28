@@ -33,6 +33,10 @@ import com.example.taskboard.logic.Situation;
  * 「午後のリフレッシュ」は リラックス 用、
  * 「午後の集中力アップ」は べんきょう 用、というふうに対応を固定した。
  *
+ * wordsFor は public static にしてある。
+ * FallbackCards も同じ前置きを使うため。
+ * 同じ言葉を2か所に書くと、片方だけ直したときに食い違う。
+ *
  * 【v5.0 について】
  *
  * 分野をアプリが決めるようになった版。
@@ -71,6 +75,15 @@ import com.example.taskboard.logic.Situation;
  * ・detail の形（✓3行＋「おわりの目安: 」）。
  * 　responseSchema の description と同じ文言に揃えること。
  * 　食い違うと description のほうが勝つ
+ *
+ * 【detail の例を書かないことにした】
+ *
+ * 以前は例として散歩の3行を置いていたが、3行とも自分で決めたルールを破っていた。
+ * 「✓新しいことを見つける」は終わりが無く、
+ * 「おわりの目安: 10分たったら」は目で見える状態ではない。
+ *
+ * 例を3回書いて3回破ったので、行動の例そのものを書かないことにした。
+ * 代わりに括弧の穴で形だけを見せている。写せる中身が無ければ引きずられない。
  *
  * 【まだ渡せていない材料】
  *
@@ -232,15 +245,17 @@ public class PromptBuilder {
 		p.append("・そのタスクの内容に合わせた具体的な手順にする。");
 		p.append("「まず手をつける」「小さく分ける」のような一般論だけの手順は禁止。\n");
 		p.append("・最後の行は、やり終えたときに目で見える状態を書く。\n");
+		p.append("　「10分たったら」のような時間や、「すっきりした」のような気持ちは、");
+		p.append("目で見える状態ではありません。\n");
 		p.append("・その状態になったら、本人がどう思っていても終わりです。");
 		p.append("そう書けるものだけを書く。\n");
 		p.append("・行の区切りは改行（\\n）にする。\n");
 		p.append("・全体で250字を超えないようにする。保存できる上限が決まっているため。\n");
-		p.append("例：\n");
-		p.append("　　✓近くの公園をさがす\n");
-		p.append("　　✓10分間ウォーキングする\n");
-		p.append("　　✓新しいことを見つける\n");
-		p.append("　　おわりの目安: 10分たったら\n\n");
+		p.append("形（中身はこのとおりにしないこと）：\n");
+		p.append("　　✓（1つ目の動作）\n");
+		p.append("　　✓（2つ目の動作）\n");
+		p.append("　　✓（3つ目の動作）\n");
+		p.append("　　おわりの目安: （やり終えたときに目で見える状態）\n\n");
 
 		// --- 出力ルール ---
 
@@ -268,12 +283,13 @@ public class PromptBuilder {
 	 * 選ばせる余地を無くせば、ずれようがない。
 	 *
 	 * 言葉を直したいときは、ここ1か所を見ればよい。
+	 * FallbackCards からも呼ぶので public static にしている。
 	 *
 	 * @param timeOfDay 朝・昼・夜・深夜
 	 * @param category  べんきょう・せいかつ・リラックス
 	 * @return 前置きの言葉
 	 */
-	private String wordsFor(String timeOfDay, String category) {
+	public static String wordsFor(String timeOfDay, String category) {
 
 		return switch (timeOfDay) {
 

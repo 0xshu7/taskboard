@@ -300,12 +300,12 @@ public class RealProposalGenerator implements ProposalGenerator {
 						"estimatedMinutes", Map.of("type", "INTEGER"),
 						"reason",           Map.of("type", "STRING"),
 						"detail",           Map.of("type", "STRING",
-						                           "description",
-						                           "「✓」で始まる手順を3行、最後の1行は「おわりの目安: 」で始める（✓は付けない）。改行(\\n)区切り")),
+		                           "description",
+		                           "「✓」で始まる手順を3行、最後の1行は「おわりの目安: 」で始める（✓は付けない）。改行(\\n)区切り。最後の行は、やり終えたときに目で見える状態を書く。時間や気持ちは書かない")),
 
-				// 全部必須にする。1つでも欠けたら AI 側でやり直してくれる
-				"required", List.of("title", "category", "granularity",
-						"difficulty", "estimatedMinutes", "reason", "detail"));
+// 全部必須にする。1つでも欠けたら AI 側でやり直してくれる
+"required", List.of("title", "category", "granularity",
+		"difficulty", "estimatedMinutes", "reason", "detail"));
 
 		return Map.of(
 				"type", "OBJECT",
