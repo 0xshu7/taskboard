@@ -2,6 +2,7 @@ package com.example.taskboard.config;
 
 // ===== インポート =====
 // 以下は Spring の部品。
+// Value         … application.yml に書いた値を受け取る
 // Bean          … このメソッドの戻り値を Spring に管理させる印
 // Configuration … 設定を書くクラスです、という印
 //
@@ -9,6 +10,7 @@ package com.example.taskboard.config;
 // HttpSecurity        … どのURLに何を要求するかを組み立てる道具
 // SecurityFilterChain … 組み立てた結果。すべての要求がここを通る
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -34,13 +36,12 @@ import org.springframework.security.web.SecurityFilterChain;
  *   /login       … ログイン画面そのもの。ここを閉じるとログインできない
  *   /error       … 失敗したときの表示。閉じると原因が見えなくなる
  *
- * 残っている課題が1つある。
- *
- * H2コンソール（/h2）を、ログインなしで開けるようにしている。
- * 開発中に自分でデータベースを見るための入口で、
- * application-dev.yml でしか有効にしていないため、
- * 公開するときは入口ごと存在しなくなる。
- * ただし開発中は、同じ端末を使える人なら誰でも開ける状態になっている。
+ * H2コンソール（/h2）は、コンソール自体が有効なときだけ開放する。
+ * 以前はプロファイルに関係なく開放していた。
+ * prod ではコンソールが無効なので実害は無かったが、
+ * 「コンソールを出すかどうか」と「開放するかどうか」が別々の場所にあり、
+ * 片方だけ変えると「コンソールは動くが誰でも入れる」状態が作れてしまった。
+ * 同じ設定から両方を決めることで、その組み合わせが起きないようにしている。
  */
 
 // ===== アノテーション =====
@@ -48,6 +49,18 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 public class SecurityConfig {
+
+	// ===== フィールド =====
+
+	/**
+	 * H2コンソールが有効かどうか。
+	 *
+	 * application-dev.yml では true、application.yml（prod）では false。
+	 * 末尾の :false は「設定が無ければ false」という既定値で、
+	 * 書き忘れたときに開放される側へ倒れないようにしてある。
+	 */
+	@Value("${spring.h2.console.enabled:false}")
+	private boolean h2ConsoleEnabled;
 
 	// ===== メソッド =====
 
@@ -59,8 +72,9 @@ public class SecurityConfig {
 	 * ブラウザからの要求は、すべてここで組み立てたものを通ってから
 	 * コントローラへ届く。
 	 *
-	 * auth -> auth... の書き方はラムダ式。
-	 * 「渡されたものに対して、こう設定する」を並べていく形になっている。
+	 * auth -> { ... } の書き方はラムダ式。
+	 * 条件によって行を足したり足さなかったりするので、
+	 * 1つずつ書く形（auth.requestMatchers(...)）にしてある。
 	 *
 	 * 並べる順番には意味がある。
 	 * 先に書いた条件から順に当てはめ、最初に合ったところで決まる。
@@ -98,16 +112,23 @@ public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
-		http.authorizeHttpRequests(auth -> auth
+		http.authorizeHttpRequests(auth -> {
+
 				// 画面を描くのに必要なファイル。ログイン画面もこれを読む
-				.requestMatchers("/css/**", "/js/**", "/sounds/**", "/sw.js",
-						"/favicon.ico", "/*.png", "/site.webmanifest").permitAll()
+				auth.requestMatchers("/css/**", "/js/**", "/sounds/**", "/sw.js",
+						"/favicon.ico", "/*.png", "/site.webmanifest").permitAll();
+
 				// ログイン画面と、失敗したときの表示
-				.requestMatchers("/login", "/error").permitAll()
-				// 開発中だけ使う。H2コンソール
-				.requestMatchers("/h2/**").permitAll()
+				auth.requestMatchers("/login", "/error").permitAll();
+
+				// H2コンソール。コンソール自体が有効なときだけ開放する
+				if (h2ConsoleEnabled) {
+					auth.requestMatchers("/h2/**").permitAll();
+				}
+
 				// 上のどれにも当てはまらないものは、ログインした人だけ
-				.anyRequest().authenticated())
+				auth.anyRequest().authenticated();
+			})
 
 			.oauth2Login(login -> login
 					.loginPage("/login")
@@ -117,9 +138,13 @@ public class SecurityConfig {
 					.logoutSuccessUrl("/login?logout"))
 
 			// H2コンソールだけ CSRF の確認から外す。
-			// Spring の作りではないので、合言葉を付ける手段がない
-			.csrf(csrf -> csrf
-					.ignoringRequestMatchers("/h2/**"))
+			// Spring の作りではないので、合言葉を付ける手段がない。
+			// コンソールが無効なら、除外する対象も無い
+			.csrf(csrf -> {
+					if (h2ConsoleEnabled) {
+						csrf.ignoringRequestMatchers("/h2/**");
+					}
+				})
 
 			// H2コンソールは画面を枠の中に埋め込む作りなので、禁止したままだと表示できない。
 			// disable() にすると、どのサイトからでもこのアプリを枠に埋め込めてしまう。

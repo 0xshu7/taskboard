@@ -1,7 +1,7 @@
 /*
  * 通知の許可をもらい、届け先をサーバーへ送る。
  *
- * 設定画面のチェックボックスから呼ばれる。
+ * 設定画面のスイッチから呼ばれる。
  *
  * 流れは3段階。
  * 1. サービスワーカー（/sw.js）を登録する
@@ -51,6 +51,10 @@ function toBytes(base64Url) {
 
 /**
  * サーバーへ送る。CSRF の合言葉を付けるのを毎回書かずに済ませる。
+ *
+ * 設定画面の効果音・紙ふぶきのスイッチも、この関数を使っている。
+ * 通知とは別の用途だが、合言葉を付ける処理は同じなので、
+ * ここに1つだけ置いて共有している。
  */
 function postJson(url, data) {
 	return fetch(url, {
@@ -142,13 +146,13 @@ async function disablePush() {
 
 // ===== 画面につなぐ =====
 
-// ===== 画面につなぐ =====
-
 // 要素を先に探すのではなく、画面全体で変化を見張る。
 // こうしておくと、読み込む順番や id の付き方に左右されない。
 //
 // 前は「読み込みが終わった時点で id で探す」形にしていたが、
 // 見つからないと何も起きず、エラーも出ないまま黙って効かなくなっていた。
+
+// --- 通知のスイッチ ---
 document.addEventListener("change", async function (event) {
 
 	// 自分の担当かどうかを、id で判断する
@@ -170,13 +174,7 @@ document.addEventListener("change", async function (event) {
 	}
 });
 
-// ===== 画面につなぐ =====
-
-// 要素を先に探すのではなく、画面全体で変化を見張る。
-// こうしておくと、読み込む順番や id の付き方に左右されない。
-//
-// 前は「読み込みが終わった時点で id で探す」形にしていたが、
-// 見つからないと何も起きず、エラーも出ないまま黙って効かなくなっていた。
+// --- 通知を試すボタン ---
 document.addEventListener("click", async function (event) {
 
 	if (event.target.id !== "push-test") {
@@ -184,5 +182,5 @@ document.addEventListener("click", async function (event) {
 	}
 
 	await postJson("/push/test", {});
-	alert("送信しました。締切が今日か明日のタスクがあれば届きます。");
+	alert("送信しました。数秒で届きます。");
 });

@@ -17,12 +17,15 @@
 </head>
 
 <!--
-	data-volume    … 効果音の音量。このページの下の方の script が読む
+	data-sound     … 効果音を鳴らすか。effects.js が読む
+	data-confetti  … 紙ふぶきを出すか。effects.js が読む
 	data-vapid-key … 通知の公開鍵。push.js が読む
 -->
-<body th:attr="data-volume=${volume}, data-vapid-key=${vapidKey}">
+<body th:attr="data-sound=${settings.soundEnabled},
+               data-confetti=${settings.confettiEnabled},
+               data-vapid-key=${vapidKey}">
 
-	<div class="container">
+	<div class="container settings">
 
 		<header class="header">
 			<div th:replace="~{fragments/logo :: appTitle}"></div>
@@ -32,20 +35,25 @@
 		     3つの画面すべてに同じものを置く。
 		     いま見ている画面だけ色を変えて、どこにいるか分かるようにする -->
 		<nav class="tabs">
-			<a class="tab" th:href="@{/tasks}">リストへ戻る</a>
+			<a class="tab" th:href="@{/tasks}">📝リストへ戻る</a>
 		</nav>
 
 		<!-- ===== 通知 ===== -->
 		<!--
 			「保存する」ボタンは無い。
-			スライドを動かした時点でブラウザに許可を求め、
-			届け先の登録と削除をその場で済ませる
+			スイッチを動かした時点でブラウザに許可を求め、
+			届け先の登録と削除をその場で済ませる。
+
+			通知の入切は、種類ごとには分けていない。
+			「これは受け取る、これは受け取らない」を選ばせると設定が増え、
+			押すたびに判断が1つ増える。
+			入れるか入れないかの1つに絞ってある
 		-->
-		<h2 class="section">通知</h2>
+		<h2 class="section">プッシュ通知</h2>
 
 		<div class="field">
 			<div class="switch-row">
-				<span class="switch-label">締切が近いタスクを通知する</span>
+				<span class="switch-label">🔔 通知を受け取る</span>
 
 				<!--
 					ラベルでチェックボックスを包むと、どこを押しても切り替わる。
@@ -57,37 +65,58 @@
 					<span class="switch-track"></span>
 				</label>
 			</div>
-
+			<div class="note-row">
 			<p class="note">
-				毎朝8時に、締切が今日か明日のタスクを知らせます。<br>
-				ブラウザの通知を使うので、メールアドレスは要りません。
+				毎朝8時のお知らせと、おまかせ完了のお知らせが届きます。
 			</p>
-
+			
 			<div class="test-notify">
 				<button type="button" class="btn-test" id="push-test">通知を試す</button>
 			</div>
-		</div>
-
-		<!-- ===== 音 ===== -->
-		<h2 class="section">音</h2>
-
-		<div class="field">
-			<label for="volume-range">効果音の音量</label>
-			<div class="volume-row">
-				<!-- form の中ではないので th:field は使えない。
-				     いまの値は th:value で入れ、保存は下の script が裏で行う -->
-				<input type="range" id="volume-range" min="0" max="100" step="10"
-					th:value="${volume}">
-				<span id="volume-value" th:text="${volume}">50</span>
 			</div>
-			<p class="note">0 にすると鳴りません。動かすと今の音量で試せます。</p>
 		</div>
+
+		<!-- ===== 演出 ===== -->
+		<!--
+			どちらも「入れるか入れないか」だけにしてある。
+
+			以前は音量を 0〜100 のつまみで持っていたが、
+			効果音は一瞬鳴るだけで、途中の値を選ぶ場面が無かった。
+			選べる値を減らすと、設定画面で立ち止まる回数も減る。
+
+			音と紙ふぶきを分けているのは、切りたい理由が別だから。
+			静かな場所では音を切りたいし、気が散るなら紙ふぶきを切りたい。
+			片方でもう片方を兼ねられない
+		-->
+		<h2 class="section">演出</h2>
+
 		<div class="field">
-		 	<p class="note">
-		 		このアプリでは、タスク案の作成に Gemini Developer API を使用しています。<br>
-		 		このアプリ内で入力した内容は Google に送信されます。
-		 	</p>
-		 </div>
+			<div class="switch-row">
+				<span class="switch-label">🔉 効果音</span>
+				<label class="switch">
+					<input type="checkbox" id="sound-enabled" th:checked="${settings.soundEnabled}">
+					<span class="switch-track"></span>
+				</label>
+			</div>
+
+			<div class="switch-row">
+				<span class="switch-label">🎊 紙ふぶき</span>
+				<label class="switch">
+					<input type="checkbox" id="confetti-enabled" th:checked="${settings.confettiEnabled}">
+					<span class="switch-track"></span>
+				</label>
+			</div>
+
+			<p class="note">スタートや完了のときの音と、お祝いの紙ふぶきです。</p>
+		</div>
+
+		<div class="field">
+			<p class="note">
+				このアプリでは、タスク案の作成に Gemini Developer API を使用しています。<br>
+				このアプリ内で入力した内容は Google に送信されます。
+			</p>
+		</div>
+
 		<!-- ===== ログアウト ===== -->
 		<!--
 			<a> ではなく <form> の POST にしている。
@@ -102,42 +131,47 @@
 
 	<script th:src="@{/js/push.js}"></script>
 	<script>
-		// 音量のつまみ。
-		// 動かしている間は数字を更新し、離したときに鳴らして、その値を保存する。
+		// 効果音と紙ふぶきのスイッチ。
+		// 切り替えた時点で保存する。「保存する」ボタンは置かない。
 		//
 		// postJson は push.js が用意している。
-		// CSRF の合言葉を付ける処理が入っているので、ここでは呼ぶだけでよい
+		// CSRF の合言葉を付ける処理が入っているので、ここでは呼ぶだけでよい。
+		//
+		// 2つまとめて送っている。
+		// 片方だけ送ると、受け取った側でもう片方が null になり、
+		// 既定値に戻ってしまう
 		(function () {
-			const range = document.getElementById("volume-range");
-			const label = document.getElementById("volume-value");
 
-			if (range === null) {
+			const sound = document.getElementById("sound-enabled");
+			const confetti = document.getElementById("confetti-enabled");
+
+			if (sound === null || confetti === null) {
 				return;
 			}
 
-			// input は動かしている最中、change は離したとき
-			range.addEventListener("input", function () {
-				label.textContent = range.value;
-			});
+			function save() {
+				postJson("/settings", {
+					soundEnabled: sound.checked,
+					confettiEnabled: confetti.checked
+				});
+			}
 
-			range.addEventListener("change", function () {
+			sound.addEventListener("change", function () {
 
-				// 保存する。画面は切り替わらない
-				postJson("/settings/volume", { soundVolume: Number(range.value) });
+				save();
 
-				// その音量で鳴らしてみる。効いたことが耳で分かる
-				const volume = Number(range.value) / 100;
-				if (volume <= 0) {
-					return;
+				// 入にしたときだけ鳴らす。効いたことが耳で分かる。
+				// 切にしたときに鳴らすと、言っていることと逆になる
+				if (sound.checked) {
+					const audio = new Audio("/sounds/complete.wav");
+					audio.volume = 0.5;
+					audio.play();
 				}
-				const sound = new Audio("/sounds/complete.wav");
-				sound.volume = volume;
-				sound.play();
 			});
+
+			confetti.addEventListener("change", save);
 		})();
 	</script>
 
 </body>
-
-</div>
 </html>

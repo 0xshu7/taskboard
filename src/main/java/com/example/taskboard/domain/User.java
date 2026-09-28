@@ -34,11 +34,17 @@ import jakarta.persistence.Table;
  * Googleに要求しているのは openid だけなので、受け取るのは sub という識別子1つ。
  * メールアドレスも名前も送られてこないし、保存もしない。
  *
- * 持っているのは4つだけ。
- *   id           … 内部の番号
- *   googleSub    … ログインした人を見分ける鍵
- *   createdAt    … いつ登録されたか
- *   soundVolume  … 効果音の音量
+ * 持っているのは5つだけ。
+ *   id              … 内部の番号
+ *   googleSub       … ログインした人を見分ける鍵
+ *   createdAt       … いつ登録されたか
+ *   soundEnabled    … 効果音を鳴らすか
+ *   confettiEnabled … 紙ふぶきを出すか
+ *
+ * 設定は「入れるか入れないか」だけにしてある。
+ * 以前は音量を 0〜100 で持っていたが、効果音は一瞬鳴るだけで、
+ * 途中の値を選ぶ場面が無かった。
+ * 選べる値を減らすと、設定画面で立ち止まる回数も減る。
  *
  * 通知を受け取るかどうかは、ここには持たない。
  * push_subscriptions に届け先の行があるかどうかが、そのまま入切を表す。
@@ -85,13 +91,25 @@ public class User {
 	private LocalDateTime createdAt;
 
 	/**
-	 * 効果音の音量。0〜100。
+	 * 効果音を鳴らすか。
 	 *
-	 * あとから足した列なので、それ以前に登録された行では null になる。
+	 * 型が boolean ではなく Boolean（null を入れられるほう）なのは、
+	 * あとから足した列だから。
+	 * それ以前に登録された行には値が無く、null で読み込まれる。
 	 * null のときの扱いは getter で面倒を見ている。
 	 */
-	@Column(name = "sound_volume")
-	private Integer soundVolume = 50;
+	@Column(name = "sound_enabled")
+	private Boolean soundEnabled = true;
+
+	/**
+	 * 紙ふぶきを出すか。
+	 *
+	 * 音とは別に持っている。
+	 * 音を切りたい場面（静かな場所）と、演出を切りたい場面（気が散る）は別なので、
+	 * 片方でもう片方を兼ねることができない。
+	 */
+	@Column(name = "confetti_enabled")
+	private Boolean confettiEnabled = true;
 
 	// ===== コンストラクタ =====
 	// 自分でコンストラクタを1つでも書くと、Java が自動で用意する
@@ -160,41 +178,49 @@ public class User {
 	}
 
 	/**
-	 * 効果音の音量を返す。
+	 * 効果音を鳴らすかを返す。
 	 *
-	 * null のときは既定値の50を返す。
+	 * null のときは true を返す。
 	 * この列はあとから足したので、それ以前に登録された行では null になる。
 	 *
-	 * 呼び出し側が int で受け取ると、null のままでは
-	 * NullPointerException で落ちる。
-	 * null の扱いを知っているのは User 自身なので、ここで面倒を見る。
+	 * 既定を true にしているのは、切りたい人だけが切ればよいため。
+	 * 最初から鳴らないと、鳴る設定があること自体に気づけない。
+	 *
+	 * 戻り値を boolean（小文字）にしているので、
+	 * 呼び出し側は null を気にせず if にそのまま書ける。
 	 */
-	public Integer getSoundVolume() {
-		return soundVolume != null ? soundVolume : 50;
+	public boolean isSoundEnabled() {
+		return soundEnabled == null || soundEnabled;
 	}
 
 	/**
-	 * 効果音の音量を入れる。0〜100 の範囲に収める。
+	 * 効果音を鳴らすかを入れる。
 	 *
-	 * 範囲外の値は、近いほうの端に丸める。例外にはしない。
-	 * 音量が範囲外だからといって、設定画面全体を失敗させる意味がないため。
-	 *
-	 * 画面のつまみは 0〜100 しか動かないが、制限しているのは画面だけ。
-	 * /settings/volume は JSON を受け取るので、直接送れば何でも入る。
+	 * null が来たら true にする。
+	 * 画面のスイッチは true か false しか送らないが、制限しているのは画面だけ。
+	 * 設定の保存先は JSON を受け取るので、直接送れば何でも入る。
 	 * 守るなら、受け取る側で守る。
 	 *
-	 * Math.max(値, 0) で「0 未満なら 0」、
-	 * Math.min(その結果, 100) で「100 を超えたら 100」になる。
-	 *
-	 * @param soundVolume 音量。null や範囲外でもよい
+	 * @param soundEnabled 鳴らすかどうか。null でもよい
 	 */
-	public void setSoundVolume(Integer soundVolume) {
+	public void setSoundEnabled(Boolean soundEnabled) {
+		this.soundEnabled = soundEnabled == null || soundEnabled;
+	}
 
-		if (soundVolume == null) {
-			this.soundVolume = 50;
-			return;
-		}
-		this.soundVolume = Math.min(Math.max(soundVolume, 0), 100);
+	/**
+	 * 紙ふぶきを出すかを返す。null のときは true。
+	 */
+	public boolean isConfettiEnabled() {
+		return confettiEnabled == null || confettiEnabled;
+	}
+
+	/**
+	 * 紙ふぶきを出すかを入れる。null が来たら true にする。
+	 *
+	 * @param confettiEnabled 出すかどうか。null でもよい
+	 */
+	public void setConfettiEnabled(Boolean confettiEnabled) {
+		this.confettiEnabled = confettiEnabled == null || confettiEnabled;
 	}
 
 	// ===== メソッド（同じ利用者かどうかの判定） =====

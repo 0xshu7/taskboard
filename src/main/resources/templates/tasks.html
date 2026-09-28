@@ -12,7 +12,8 @@
   <meta name="_csrf" th:content="${_csrf.token}">
   <meta name="_csrf_header" th:content="${_csrf.headerName}">
 </head>
-<body th:attr="data-volume=${volume}">
+<body th:attr="data-sound=${settings.soundEnabled},
+               data-confetti=${settings.confettiEnabled}">
 
 <div class="container">
 
@@ -20,7 +21,7 @@
   <header class="header">
     <div th:replace="~{fragments/logo :: appTitle}"></div>
     <p class="remaining">
-      残り <span class="remaining-num" id="remaining-num" th:text="${remaining}">0</span> 件
+      残りのタスク <span class="remaining-num" id="remaining-num" th:text="${remaining}">0</span> 件
     </p>
   </header>
 
@@ -41,7 +42,7 @@
     <div class="add-form-row">
 
       <input class="input-title" type="text" name="title"
-             placeholder="やることを書く" maxlength="100" required autocomplete="off">
+             placeholder="新しいタスクを入力" maxlength="100" required autocomplete="off">
 
       <select class="input-difficulty" name="difficulty">
         <!-- 最初に見えている案内用の項目。value を空にしておく -->
@@ -71,8 +72,12 @@
 
   <ul class="task-list" id="task-list">
 
+	<!-- data-auto-at は、おまかせ完了の予定時刻。
+	     画面の一番下のスクリプトが、この時刻を見て読み直しを予約する。
+	     予約していないタスクでは空になるので、そのときは何もしない -->
 	<li class="task" th:each="task : ${tasks}"
 	    th:data-id="${task.id}"
+	    th:attr="data-auto-at=${task.autoCompleteAt}"
 	    th:classappend="'task-' + ${task.status}">
 
 	  <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
@@ -287,7 +292,19 @@
 		  </form>
 
 		  <div class="task-detail-body">
-		    <p class="detail-head">💡 完了のヒント</p>
+
+		    <!-- 未完了側と同じく、見出しと右端の2段構えにする。
+		         あちらは右端が「やっちゃう」、こちらは完了日時。
+		         同じ場所に置くことで、開いたときの視線の動きが揃う -->
+		    <div class="detail-head-row">
+		      <p class="detail-head">💡 完了のヒント</p>
+
+		      <p class="detail-done-at"
+		         th:if="${task.completedAt != null}"
+		         th:text="'🏁 ' + ${#temporals.format(task.completedAt, 'yyyy/M/d HH:mm')} + ' に完了'">
+		        🏁 2026/9/24 15:57 に完了
+		      </p>
+		    </div>
 
 		    <p class="detail-text"
 		       th:if="${task.detail != null and !task.detail.isEmpty()}"
@@ -315,6 +332,49 @@
 			document.getElementById(button.dataset.target).showModal();
 		});
 	});
+</script>
+<script>
+	// ===== おまかせ完了を画面に反映する =====
+	//
+	// 時刻を見ているのはサーバー側なので、開いたままの画面は
+	// 完了したことを知らない。手で更新しないと古いままになる。
+	//
+	// 一定間隔で読み直すと、入力の途中で消えることがある。
+	// おまかせ中のタスクがあるときだけ、その時刻に1回だけ読み直す。
+	// 新しい通信は要らない。完了予定の時刻は、すでに画面が持っている。
+	(function () {
+
+		// 完了予定が入っているタスクを集める
+		const times = [];
+
+		document.querySelectorAll(".task[data-auto-at]").forEach(function (li) {
+			const raw = li.dataset.autoAt;
+			if (raw) {
+				times.push(new Date(raw).getTime());
+			}
+		});
+
+		if (times.length === 0) {
+			return;                       // おまかせ中が無ければ何もしない
+		}
+
+		// いちばん早く完了するものに合わせる。
+		// 残りは、そのとき読み直した画面で改めて予約される
+		const soonest = Math.min.apply(null, times);
+		const rest = soonest - Date.now();
+
+		// サーバーは10秒ごとに見ているので、時刻ちょうどではまだ完了していない。
+		// 12秒の余裕を持たせる。
+		//
+		// すでに過ぎている場合も同じだけ待つ。
+		// すぐ読み直すと、まだ完了していない画面をまた読み直すことになり、
+		// 止まらなくなる
+		const wait = Math.max(rest, 0) + 12000;
+
+		setTimeout(function () {
+			location.reload();
+		}, wait);
+	})();
 </script>
 </body>
 </html>

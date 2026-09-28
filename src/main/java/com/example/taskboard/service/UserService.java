@@ -75,7 +75,16 @@ public class UserService {
 	 */
 	@Transactional
 	public User current() {
+
 		String googleSub = currentPrincipal().getAttribute("sub");
+
+		// sub が来ないことは、設定が正しければ起きない。
+		// ただし来なかった場合、findByGoogleSub(null) は必ず空振りするため、
+		// 呼ばれるたびに新しい利用者が作られ続ける。
+		// タスクが消えたように見えて、原因が分かりにくい。ここで止める。
+		if (googleSub == null || googleSub.isBlank()) {
+			throw new IllegalStateException("Googleから識別子を受け取れませんでした");
+		}
 
 		return userRepository.findByGoogleSub(googleSub)
 				.orElseGet(() -> userRepository.save(new User(googleSub)));

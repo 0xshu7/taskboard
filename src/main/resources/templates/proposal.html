@@ -10,7 +10,8 @@
   <link rel="apple-touch-icon" th:href="@{/apple-touch-icon.png}">
   <link rel="manifest" th:href="@{/site.webmanifest}">
 </head>
-<body th:attr="data-volume=${volume}">
+<body th:attr="data-sound=${settings.soundEnabled},
+               data-confetti=${settings.confettiEnabled}">
 
 <div class="container proposals">
 

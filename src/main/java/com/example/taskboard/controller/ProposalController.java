@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 
 import com.example.taskboard.domain.ProposalSet;
+import com.example.taskboard.dto.SettingsForm;
 import com.example.taskboard.service.ProposalService;
 import com.example.taskboard.service.UserService;
 
@@ -107,7 +108,8 @@ public class ProposalController {
 		model.addAttribute("cards", proposalService.findCards(setId));
 
 		// 効果音の音量。画面の body に渡し、JavaScript がそこから読む
-		model.addAttribute("volume", userService.current().getSoundVolume());
+		// 設定は入れ物ごと渡す。項目が増えても、この行は変わらない
+		model.addAttribute("settings", SettingsForm.from(userService.current()));
 
 		return "proposal";
 	}

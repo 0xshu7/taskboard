@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import com.example.taskboard.domain.Difficulty;
+import com.example.taskboard.dto.SettingsForm;
 import com.example.taskboard.service.TaskService;
 import com.example.taskboard.service.UserService;
 
@@ -105,7 +106,8 @@ public class TaskController {
 		model.addAttribute("remaining", taskService.countRemaining());
 
 		// 効果音の音量。画面の body に渡し、JavaScript がそこから読む
-		model.addAttribute("volume", userService.current().getSoundVolume());
+		// 設定は入れ物ごと渡す。項目が増えても、この行は変わらない
+		model.addAttribute("settings", SettingsForm.from(userService.current()));
 
 		// 難易度の選択肢。列挙型の一覧をそのまま渡す
 		model.addAttribute("difficulties", Difficulty.values());

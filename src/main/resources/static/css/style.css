@@ -1,10 +1,10 @@
 /* ==========================================================================
-   Task Board  スタイルシート
+   さんたく  スタイルシート
 
    構成
      1. 色と影の定義
      2. 土台（body / container）
-     3. 見出しとタブ
+     3. ロゴ・見出し・タブ
      4. ボタン（共通）
      5. 入力欄（共通）
      6. 追加フォーム
@@ -12,16 +12,35 @@
      8. 編集ダイアログ
      9. 完了タスクの折りたたみ
     10. お知らせの帯
-    11. スタート画面
+    11. スタート画面とログイン画面
     12. 提案画面（3択）
-    13. 設定画面
-    14. 花吹雪
-    15. 動きを減らす設定
+    13. 待っているあいだの表示
+    14. 設定画面
+    15. エラー画面
+    16. 花吹雪
+    17. 動きを減らす設定
 
    同じ見た目のものは、まとめて1か所で指定する。
    別々に書くと、片方だけ直して食い違う。
    同じセレクタを2回書くと、後ろが勝つ指定と前が残る指定が混ざる。
    エラーは出ないので、重複は必ず消す。
+
+   【この版で直したこと】
+
+   上のルールを、自分で破っていた。
+   直したいところが出るたびにファイルの末尾へ足していった結果、
+   .app-title が4回、.card と .card-title が3回、.tabs と .btn-choose が2回、
+   .detail-done-at にいたっては中身まで同じものが2回書かれていた。
+
+   足していくぶんには画面は正しく見える。後ろが勝つので、意図どおりに動く。
+   困るのは読むときで、前の指定が生きているのか消されたのかが、
+   最後まで読まないと分からない。直すのが怖いファイルになる。
+
+   使われていない指定も2つ残っていた。
+   　.volume-row       … 音量つまみをやめたときに消し忘れた
+   　text-decoration-thickness … 取り消し線をやめたのに、太さだけが残っていた
+
+   どちらも画面には出ないので、気づく機会が無い。
    ========================================================================== */
 
 
@@ -102,21 +121,33 @@ body {
     var(--cyan)  66.6%, var(--cyan)  100%);
 }
 
-
 /* 提案画面だけ幅を絞る。
    3案を見比べる画面なので、横に伸びると視線の移動が大きくなる */
 .container.proposals {
   max-width: 560px;
 }
+
+/* 設定画面も幅を絞る。
+   1行に1項目しか置かない画面なので、横に伸びるとスイッチが遠くなる */
+.container.settings {
+  max-width: 700px;
+}
+
+
 /* ==========================================================================
-   3. 見出しとタブ
+   3. ロゴ・見出し・タブ
    ========================================================================== */
 
 .header { margin-bottom: 14px; }
 
+/* アプリ名。猫のイラストと文字を横に並べ、中央に置く */
 .app-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   margin: 6px 0 4px;
-  font-size: 30px;
+  font-size: 36px;
   font-weight: 800;
   letter-spacing: .01em;
 }
@@ -124,6 +155,53 @@ body {
 .app-title a {
   color: inherit;
   text-decoration: none;
+}
+
+/* 猫。文字の大きさに合わせて伸び縮みさせる */
+.app-title svg {
+  width: auto;
+  height: 2em;
+  flex: 0 0 auto;
+  display: block;
+}
+
+/* --- 大きい版（スタート画面・ログイン画面） ---
+   猫を上、名前を下に積む。表紙として見せる形 */
+
+.app-title--large {
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+  font-size: 40px;
+}
+
+.app-title--large svg {
+  height: 88px;
+}
+
+/* line-height を1にしないと、文字の上下に余白が付いて猫から離れる */
+.app-title--large span {
+  line-height: 1;
+  display: block;
+}
+
+/* 名前のすぐ下に来るキャッチ。近すぎるので離す */
+.app-title--large p,
+.app-title--large + p {
+  margin-top: 18px;
+  margin-bottom: 0;
+}
+
+.app-tagline {
+  font-size: 16px;
+}
+
+/* ログイン画面の、名前の由来。主役は名前なので小さく */
+.app-sub {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .remaining {
@@ -150,6 +228,7 @@ body {
 .tabs {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin: 14px 0 20px;
 }
@@ -276,10 +355,8 @@ body {
   padding: 10px 16px;
 }
 
-/* 四角い形（設定・編集ダイアログ） */
+/* 四角い形（編集ダイアログ） */
 .field input[type="text"],
-.field input[type="email"],
-.field input[type="time"],
 .field input[type="date"],
 .field textarea,
 .field select {
@@ -341,17 +418,29 @@ body {
 /* --- 区切りと補足 --- */
 
 .section {
-  font-size: 15px;
+  font-size: 16px;
   margin: 28px 0 12px;
   padding-bottom: 6px;
   border-bottom: 3px solid var(--ink);
 }
 
 .note {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--muted);
   margin: 8px 0 0;
+}
+
+/* 説明文と、その右端に置くボタンを同じ行に並べる */
+.note-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.note-row .note {
+  margin: 0;
+  flex: 1 1 auto;
 }
 
 
@@ -465,6 +554,23 @@ body {
   box-shadow: none;
 }
 
+/* タイトルと▾の箱。
+   flex: 1 1 0 は「基準0から、残り幅を全部使う」という指定。
+   他の要素が先に幅を取るので、この箱がはみ出すことがない。
+
+   min-width: 0 が無いと、中身の幅より小さくならず、結局あふれる */
+.task-head {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-head .task-title {
+  min-width: 0;
+}
+
 /* タイトル。長ければ折り返して全文を見せる */
 .task-title {
   flex: 1 1 140px;
@@ -474,10 +580,10 @@ body {
   white-space: pre-wrap;
 }
 
-/* 完了したものは取り消し線を引き、薄くする */
+/* 完了したものは薄くする。
+   取り消し線は引かない。読みにくくなるうえ、
+   完了かどうかは緑のタグと完了日時で分かるため */
 .task-DONE .task-title {
-  text-decoration: line-through;
-  text-decoration-thickness: 2px;
   color: var(--muted);
 }
 
@@ -528,10 +634,7 @@ body {
 /* 状態を持つだけの部品。見せないが、消してはいけない */
 .detail-check { display: none; }
 
-
-
-/* 押す場所。タイトルのすぐ右に、小さな四角として置く。
-   margin-right: auto で、これより後ろのもの（締切・難易度・編集・✕）を右端に寄せる */
+/* 押す場所。タイトルのすぐ右に、小さな四角として置く */
 .detail-toggle {
   flex: none;
   width: 22px;
@@ -583,13 +686,24 @@ body {
   justify-content: space-between;
 }
 
+/* 完了日時。完了のヒントの見出し行の右端に出す。
+   margin-left: auto で右へ寄せているので、
+   detail-head-row の中身が増えても位置が変わらない */
+.detail-done-at {
+  margin: 0 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* 自動完了のボタン。ヒントの右上に置く */
 .btn-auto {
   padding: 5px 14px;
-  border: 2px solid #000;
-  border-radius: 999px;
+  border: 2px solid var(--ink);
+  border-radius: var(--pill);
   background: #fff;
-  color: #000;
+  color: var(--ink);
   font-family: inherit;
   font-size: 12px;
   font-weight: bold;
@@ -598,7 +712,7 @@ body {
 
 /* おまかせ中。動いていることが分かるように色を付ける */
 .btn-auto-on {
-  background: #FF9020;
+  background: var(--orange);
   color: #fff;
 }
 
@@ -735,7 +849,7 @@ body {
 
 
 /* ==========================================================================
-   11. スタート画面
+   11. スタート画面とログイン画面
    ========================================================================== */
 
 .home { text-align: center; padding-bottom: 40px; }
@@ -805,12 +919,6 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-
-
-
-
-/* --- ログイン画面 --- */
-
 /* Googleへ送るボタン。
    スタートボタンと同じ形にして、押すものが1つだと分かるようにする。
    <a> なので既定で下線が付く。text-decoration: none で消す */
@@ -830,6 +938,11 @@ body {
   text-decoration: none;
 }
 
+.btn-google:active {
+  transform: translate(6px, 6px);
+  box-shadow: none;
+}
+
 /* ログイン画面の注意書き。
    押す前に読める位置に置くが、主役はボタンなので小さく */
 .login-note {
@@ -840,10 +953,6 @@ body {
   text-align: center;
 }
 
-.btn-google:active {
-  transform: translate(6px, 6px);
-  box-shadow: none;
-}
 
 /* ==========================================================================
    12. 提案画面（3択）
@@ -861,6 +970,7 @@ body {
   font-size: 13px;
   text-align: center;
 }
+
 .card-list { list-style: none; margin: 0 0 20px; padding: 0; }
 
 /* 提案カード1枚 */
@@ -869,8 +979,8 @@ body {
   border: 3px solid var(--ink);
   border-radius: var(--round-lg);
   box-shadow: var(--shadow);
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
 }
 
 .card-head {
@@ -905,6 +1015,28 @@ body {
   font-weight: 800;
 }
 
+/* 新しい案か、一覧にあったものか */
+.card-tag {
+  padding: 4px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--pill);
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* 新しい案。目を引くほうに色を付ける */
+.card-tag-new {
+  background: var(--green);
+  color: #fff;
+}
+
+/* リストにあったもの。既に知っているものなので、
+   枠は同じでも中は白のままにして下がらせる */
+.card-tag-list {
+  background: #fff;
+  color: #999;
+}
+
 .card-minutes {
   margin-left: auto;
   font-size: 13px;
@@ -912,24 +1044,30 @@ body {
 }
 
 .card-title {
-  margin: 0 0 8px;
+  margin: 8px 0 8px;
   font-size: 18px;
   word-break: break-word;
 }
 
 /* 理由。ここが「自分向けだ」と感じさせる部分 */
 .card-reason {
-  margin: 0 0 14px;
-  font-size: 13px;
+  margin: 4px 0 14px;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.7;
 }
 
+/* 選ぶボタン。カードの右下に置く */
+.choose-form {
+  margin-top: 10px;
+  text-align: right;
+}
+
 .btn-choose {
-  width: 100%;
-  padding: 14px;
+  width: auto;
+  padding: 8px 22px;
   border-radius: 12px;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 /* 別の話題にする。主役ではないので白地に */
@@ -959,22 +1097,76 @@ body {
 
 
 /* ==========================================================================
-   13. 設定画面
+   13. 待っているあいだの表示
+
+   AI の返事を待つあいだ、画面全体を覆って「動いている」ことを見せる。
+   何も出さないと、押せていないのかと思って押し直される。
    ========================================================================== */
 
-/* 音量のつまみ */
-.volume-row {
+/* position: fixed は、スクロールしても画面に貼り付いたままになる指定。
+   inset: 0 は上下左右すべて0、つまり画面いっぱいという意味 */
+.waiting-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  background: rgba(0, 0, 0, .45);
 }
 
-.volume-row input[type="range"] { flex: 1; }
-
-.volume-row span {
-  min-width: 2.5em;
-  text-align: right;
+/* 中央の白い箱。カードと同じ太い黒枠とずらした影にして、
+   このアプリの一部に見えるようにする */
+.waiting-box {
+  padding: 32px 40px;
+  border: 3px solid var(--ink);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
 }
+
+.waiting-face {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.waiting-text {
+  margin-top: 14px;
+  font-weight: bold;
+  font-size: 15px;
+}
+
+/* 動く点を3つ。3案の3色に合わせてある */
+.waiting-dots {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.waiting-dots span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  animation: waiting-blink 1.2s infinite;
+}
+
+.waiting-dots span:nth-child(1) { background: var(--pink);  animation-delay: 0s; }
+.waiting-dots span:nth-child(2) { background: var(--green); animation-delay: .2s; }
+.waiting-dots span:nth-child(3) { background: var(--cyan);  animation-delay: .4s; }
+
+/* 順番に濃くなる。時間差は animation-delay で作っている */
+@keyframes waiting-blink {
+  0%, 60%, 100% { opacity: .25; }
+  30%           { opacity: 1; }
+}
+
+
+/* ==========================================================================
+   14. 設定画面
+   ========================================================================== */
+
 /* --- 入切のスライド --- */
 
 .switch-row {
@@ -984,7 +1176,7 @@ body {
   gap: 12px;
 }
 
-.switch-label { font-size: 14px; }
+.switch-label { font-size: 16px; }
 
 /* ラベルでチェックボックスを包むと、どこを押しても切り替わる。
    .field label の display:block を打ち消すため、ここで指定し直す */
@@ -1040,24 +1232,19 @@ body {
 .switch input:focus-visible + .switch-track {
   box-shadow: 0 0 0 4px rgba(240, 51, 140, .18);
 }
-.links {
-  margin-top: 24px;
-  display: flex;
-  gap: 16px;
-  justify-content: center;
+
+/* --- 動作確認用のボタン ---
+   通知の説明文と同じ行の右端に置く。
+   ふだん押すものではないので、点線の枠で控えめにする */
+
+.test-notify {
+  flex: 0 0 auto;
 }
 
-/* ログアウト。完了リストの右下に、控えめに置く。
-   ふだん押すものではないので、目立たせない */
-.logout-form {
-  margin-top: 14px;
-  text-align: right;
-}
-
-.btn-logout {
+.btn-test {
   padding: 6px 16px;
-  border: 2px solid var(--muted);
-  border-radius: var(--pill);
+  border: 2px dashed var(--muted);
+  border-radius: 10px;
   background: transparent;
   color: var(--muted);
   font-family: inherit;
@@ -1065,8 +1252,59 @@ body {
   cursor: pointer;
 }
 
+/* --- ログアウト ---
+   画面のいちばん下に、右寄せで置く。
+   ふだん押すものではないので、背景は塗らず、枠と文字だけピンクにする */
+
+.logout-form {
+  margin-top: 14px;
+  text-align: right;
+}
+
+.btn-logout {
+  padding: 6px 16px;
+  border: 2px solid var(--pink);
+  border-radius: var(--pill);
+  background: #fff;
+  color: var(--pink);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-logout:hover {
+  background: #fff0f6;
+}
+
+.links {
+  margin-top: 24px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+
 /* ==========================================================================
-   14. 花吹雪
+   15. エラー画面
+   ========================================================================== */
+
+.error-code {
+  font-size: 64px;
+  font-weight: 900;
+  text-align: center;
+  color: var(--pink);
+  margin: 32px 0 8px;
+}
+
+.error-text {
+  text-align: center;
+  color: var(--muted);
+  margin: 0 0 32px;
+}
+
+
+/* ==========================================================================
+   16. 花吹雪
    ========================================================================== */
 
 /* 画面全体に重ねる透明な板。クリックは下に素通りさせる */
@@ -1082,235 +1320,46 @@ body {
 
 
 /* ==========================================================================
-   15. 動きを減らす設定
+   17. 動きを減らす設定
 
    動きが苦手な人はブラウザ側で設定できる。それを尊重して止める。
    ========================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
   .message,
-  .detail-toggle {
+  .detail-toggle,
+  .waiting-dots span {
     animation: none;
     transition: none;
   }
 }
 
-/* 動作確認用。通知のスライドのすぐ下に、控えめに置く */
-.test-notify {
-  margin-top: 12px;
-  text-align: right;
-}
-
-.btn-test {
-  padding: 6px 16px;
-  border: 2px dashed var(--muted);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.choose-form {
-  margin-top: 10px;
-  text-align: right;
-}
-
-.btn-choose {
-  width: auto;          /* 100% をやめる */
-  padding: 8px 22px;
-  font-size: 14px;
-}
-
-.card {
-  padding: 14px 16px;
-}
-
-.card-title {
-  margin-top: 8px;
-  font-size: 16px;
-}
-
-.card-reason {
-  margin-top: 4px;
-  font-size: 12px;
-}
-
-.card {
-  margin-bottom: 10px;
-}
-.card-title {
-  font-size: 18px;
-}
-
-/* ===== 待っているあいだの表示 ===== */
-
-/* 画面全体を覆う。
-   position: fixed は、スクロールしても画面に貼り付いたままになる指定。
-   inset: 0 は上下左右すべて0、つまり画面いっぱいという意味 */
-.waiting-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-/* 中央の白い箱。カードと同じ太い黒枠とずらした影にして、
-   このアプリの一部に見えるようにする */
-.waiting-box {
-  padding: 32px 40px;
-  border: 3px solid #000;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: 6px 6px 0 #000;
-  text-align: center;
-}
-
 .waiting-face {
   font-size: 48px;
   line-height: 1;
+
+  /* 絵文字は文字なので、そのままでは transform が効かない。
+     inline-block にすると箱として扱われ、動かせるようになる */
+  display: inline-block;
+
+  animation: waiting-float 2.4s ease-in-out infinite;
 }
 
-.waiting-text {
-  margin-top: 14px;
-  font-weight: bold;
-  font-size: 15px;
+/* ゆっくり浮いて、ゆっくり戻る。
+   点の点滅（1.2秒）とずらしてあるので、2つの動きが揃って見えない */
+@keyframes waiting-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
 }
 
-/* 動く点を3つ。3案の3色に合わせてある */
-.waiting-dots {
-  margin-top: 14px;
-  display: flex;
-  gap: 8px;
-  justify-content: center;
+@media (prefers-reduced-motion: reduce) {
+  .message,
+  .detail-toggle,
+  .waiting-dots span,
+  .waiting-face {
+    animation: none;
+    transition: none;
+  }
 }
 
-.waiting-dots span {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  animation: waiting-blink 1.2s infinite;
-}
 
-.waiting-dots span:nth-child(1) { background: #FF2D8A; animation-delay: 0s; }
-.waiting-dots span:nth-child(2) { background: #7ED321; animation-delay: 0.2s; }
-.waiting-dots span:nth-child(3) { background: #00C2D1; animation-delay: 0.4s; }
-
-/* 順番に濃くなる。時間差は animation-delay で作っている */
-@keyframes waiting-blink {
-  0%, 60%, 100% { opacity: 0.25; }
-  30%           { opacity: 1; }
-}
-.card-tag {
-  padding: 4px 12px;
-  border: 2px solid #000;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: bold;
-}
-
-/* 新しい案。目を引くほうに色を付ける */
-.card-tag-new {
-  background: #7ED321;
-  color: #fff;
-}
-
-/* リストにあったもの。既に知っているものなので、
-   枠は同じでも中は白のままにして下がらせる */
-.card-tag-list {
-  background: #fff;
-  color: #999;
-}
-
-/* タイトルと▾の箱。
-   flex: 1 1 0 は「基準0から、残り幅を全部使う」という指定。
-   他の要素が先に幅を取るので、この箱がはみ出すことがない。
-
-   min-width: 0 が無いと、中身の幅より小さくならず、結局あふれる */
-.task-head {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.task-head .task-title {
-  min-width: 0;
-}
-
-.tabs {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-/* ログイン画面の、名前の由来。
-   app-title のすぐ下に置く。主役は名前なので小さく */
-.app-sub {
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: 13px;
-  text-align: center;
-}
-
-.app-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.app-title svg {
-  width: auto;
-  height: 2em;
-  flex: 0 0 auto;
-  display: block;
-}
-
-.app-title--large {
-  flex-direction: column;
-  gap: 10px;
-  text-align: center;
-}
-
-.app-title--large svg {
-  height: 88px;
-}
-
-.app-title {
-  display: flex;
-  align-items: center;
-  justify-content: center;   /* ← 追加 */
-  gap: 10px;
-}
-
-.app-title--large {
-  font-size: 40px;   /* いま 36px くらい。まずここだけ */
-}
-
-.app-tagline {
-  font-size: 16px;   /* いま 14px */
-}
-
-.app-title--large {
-  gap: 4px;          /* 10px → 4px */
-}
-
-.app-title--large span {
-  line-height: 1;    /* ← これが効きます */
-  display: block;
-}
-
-.app-title {
-  font-size: 36px;   /* いま 34px くらい */
-}
-
-.app-title--large p,
-.app-title--large + p {
-  margin-top: 18px;
-  margin-bottom: 0;
-}

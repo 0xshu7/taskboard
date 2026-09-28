@@ -34,18 +34,21 @@ import com.example.taskboard.service.UserService;
  *
  * 扱うURLは2つ。
  * 表示（GET）  … /settings
- * 保存（POST） … /settings/volume
+ * 保存（POST） … /settings
  *
  * この画面には「保存する」ボタンが無い。
  * 触った時点で反映される形にしてある。
  *
- * 通知のスライドは push.js が /push/subscribe と /push/unsubscribe を呼ぶ。
- * 音量のつまみは、離した時点で /settings/volume を呼ぶ。
+ * 通知のスイッチは push.js が /push/subscribe と /push/unsubscribe を呼ぶ。
+ * 効果音と紙ふぶきのスイッチは、切り替えた時点で /settings を呼ぶ。
  *
- * ボタンを置かないのは、設定が2つしかなく、
- * どちらも変わったことがその場で分かるため。
- * 音量は音が鳴り、通知はスライドの色が変わる。
+ * ボタンを置かないのは、どの設定も変わったことがその場で分かるため。
+ * 効果音は音が鳴り、通知と紙ふぶきはスイッチの色が変わる。
  * 効いたかどうかが見えていれば、「保存した」と伝える必要がない。
+ *
+ * 保存のURLは、以前は /settings/volume だった。
+ * 音量だけを保存していたころの名前で、設定が増えた時点で実態と合わなくなった。
+ * 「この画面の設定を保存する」口なので /settings に変えてある。
  */
 @Controller
 public class SettingsController {
@@ -55,7 +58,7 @@ public class SettingsController {
 	/** 利用者と設定 */
 	private final UserService userService;
 
-	/** 通知の届け先。スライドの初期状態を決めるために使う */
+	/** 通知の届け先。スイッチの初期状態を決めるために使う */
 	private final PushSubscriptionRepository subscriptionRepository;
 
 	/**
@@ -90,9 +93,13 @@ public class SettingsController {
 	 * 設定画面を出す。
 	 *
 	 * 画面へ渡すのは3つ。
-	 *   volume      … 効果音の音量。つまみの位置と、試し鳴らしに使う
+	 *   settings    … 効果音と紙ふぶきの設定。まるごと1つの入れ物で渡す
 	 *   vapidKey    … 通知の公開鍵。push.js が body から読む
-	 *   pushEnabled … 通知のスライドを入にして表示するかどうか
+	 *   pushEnabled … 通知のスイッチを入にして表示するかどうか
+	 *
+	 * settings を項目ごとに詰めていないのは、増やすたびに
+	 * 画面を出すすべてのコントローラを触ることになるため。
+	 * 入れ物ごと渡しておけば、項目が増えてもこの行は変わらない。
 	 *
 	 * pushEnabled は、届け先が1件でもあるかで決める。
 	 * 入切を別の列に持たず、届け先の有無そのものを状態として使っている。
@@ -111,7 +118,7 @@ public class SettingsController {
 
 		User user = userService.current();
 
-		model.addAttribute("volume", user.getSoundVolume());
+		model.addAttribute("settings", SettingsForm.from(user));
 		model.addAttribute("vapidKey", vapidPublicKey);
 		model.addAttribute("pushEnabled", subscriptionRepository.existsByUserId(user.getId()));
 
@@ -119,16 +126,16 @@ public class SettingsController {
 	}
 
 	/**
-	 * 音量を保存する。つまみを離したときに、画面から裏で呼ばれる。
+	 * 設定を保存する。スイッチを切り替えたときに、画面から裏で呼ばれる。
 	 *
 	 * @ResponseBody を付けているので、返した "ok" がそのまま応答になる。
 	 * 付けないと、Spring が ok.html というテンプレートを探しに行って失敗する。
 	 *
 	 * @RequestBody は、届いた JSON を SettingsForm に詰めて渡す仕組み。
-	 * {"soundVolume":50} のような形で送られてくる。
+	 * {"soundEnabled":true,"confettiEnabled":false} のような形で送られてくる。
 	 *
-	 * 範囲の確認はここでは行わない。
-	 * User.setSoundVolume が 0〜100 に丸めるので、
+	 * 値の確認はここでは行わない。
+	 * User の setter が null を既定値に直すので、
 	 * どんな値が送られても、そのまま保存されることはない。
 	 *
 	 * 画面は切り替わらないので、redirect: も返さない。
@@ -136,9 +143,9 @@ public class SettingsController {
 	 * @param form 画面から届いた設定
 	 * @return 画面では使わないが、成功したことを示す文字列
 	 */
-	@PostMapping("/settings/volume")
+	@PostMapping("/settings")
 	@ResponseBody
-	public String saveVolume(@RequestBody SettingsForm form) {
+	public String save(@RequestBody SettingsForm form) {
 		userService.updateSettings(form);
 		return "ok";
 	}

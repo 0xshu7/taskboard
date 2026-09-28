@@ -12,95 +12,63 @@ import com.example.taskboard.logic.Situation;
 /**
  * AI に送る文章を組み立てる。
  *
- * 【この版について】
+ * 【v4.1 について】
  *
- * 別に作ったモック（Cloudflare Workers AI）のプロンプトに、できる限り合わせている。
- * 見出しの名前、プロフィールの形、ルールの順番と書き方、手順の形、
- * 出力例の載せ方まで、変える理由が無いところは、そのまま同じにしている。
+ * v4.0（v1.6 を土台に戻した版）に、材料を2つ足した版。
  *
- * 【v3.2 で戻したこと】
+ * ■ 足したもの：最近やったこと・今回は出さないもの
  *
- * v3.1 のルール1に「未完了の一覧にあるタスクから切り出して作る」と書いていた。
- * これは間違いだった。WorkLog（Day 5）に、こう決めてある。
+ * v4.0 まで、AI に渡していたのは「未完了の一覧・時間帯・3つ目に使うタスク」だけだった。
+ * 完了したタスクも、前回出した3案も渡していない。
+ * つまり AI は過去を知らないまま「新しい案」を作れと言われていた。
  *
- * 　・禁止リスト（散歩・ゴミ捨てを禁じる）は作らない
- * 　・ゴミ捨ては成功なので、禁じると害になる
- * 　・このアプリの目的は、止まっている人が動き出すこと。
- * 　　動けたなら、それがゴミ捨てでも成功になる
+ * その結果、前にやったものと同じ内容が「あたらしい」として出てきた。
+ * プロンプトの書き方の問題ではなく、材料が足りていなかった。
  *
- * 「一覧から切り出せ」は、一覧に無いこと（コーヒーを淹れる、外を歩く）を
- * まとめて禁止する。名前は違うが、作らないと決めた禁止リストそのものだった。
+ * これで「別の案を見る」も動く。
+ * 前は同じ材料で呼び直すだけだったので、似たものが返ってきて当然だった。
  *
- * 3案が3件とも勉強に寄ったのは、この指示が原因。
- * 一覧が勉強中心のとき、1件目も2件目も一覧から作れば、3件とも勉強になる。
+ * 【v4.0 で戻したもの：時間帯の語彙】
  *
- * 【タスクの定義も戻した】
+ * v1.5 と v1.6 には「title の付け方」の節に、時間帯ごとの言葉があった。
+ * v2 の書き直しで消えていた。消したことに気づいたのは 9/25 で、
+ * proposal_sets.prompt_text に v1.6 が残っていたので復元できた。
  *
- * 3条件の3つ目を「この人がかかえていることが目に見えて前に進む」と書いていたが、
- * 記録では「終わったあとに何かが残る」。版を重ねるうちに条件が強くなっていた。
+ * 版番号を先頭に書いて保存する仕組みが、そのまま復元の手段になった。
  *
- * 　WorkLog（Day 5）　　終わったあとに何かが残る
- * 　発表資料 v1　　　　 やると、何かが前に進む
- * 　PromptBuilder v1.6　やると、かかえていることが目に見えて前に進む
+ * v1.6 との違いは1点。あちらは4時間帯ぶんを全部渡していたが、
+ * 朝に「今夜のメインイベント」が見えている必要はないので、
+ * いまの時間帯のぶんだけを渡す。
  *
- * 最後の形は、一覧に紐づかないものを全部落とす。これも上と同じ効果を持っていた。
- * 記録の文面に戻してある。
+ * 【v4.0 で直したもの1：プロフィールを外した】
  *
- * 【さんたく側の事情で、モックに合わせられなかったもの】
+ * v1.6 には「専門学校生」「自炊が面倒」など4行が書いてあった。
+ * これは初回の3択（F-02）に本人が答えた結果を入れる場所で、
+ * その画面がまだ無いので仮の値を置いていた。
  *
- * 1. 3件の内訳
- *    モックは「既存2＋新規1」で、どれを選ぶかを AI が決める。
- *    さんたくは「新規2＋既存1」で、既存の1件はアプリがくじ引きで決めてから渡す。
- *    仕様そのものなので変えていない。
+ * 仮の値は、AI にとって本人の答えと区別がつかない。
+ * 材料が他に無いとき（タスク0件のとき）ほど、この数行だけが残って強く効く。
+ * 答えが無いなら渡さない。3択の画面ができたら、そのとき戻す。
  *
- * 2. kind / task_id のフィールド
- *    モックは AI に「これは既存/新規」を申告させるが、
- *    さんたくは3件目が既存だとアプリ側で決まっているので、申告してもらう必要が無い。
+ * 【v4.0 で直したもの2：detail の形】
  *
- * 3. 最近完了したタスク・除外リスト
- *    モックはこの2つを材料に入れている。
- *    さんたくは buildProposal がそれを受け取っていないので、いまは渡せない。
- *    プロンプトだけでは足せない（引数と取得処理が要る）。
- *    この穴は埋めていない。埋めようとして書いたのが v3.1 のルール1で、
- *    別の材料で代用しようとした結果、上に書いた不具合になった。
- *    必要なら、材料そのものを渡せるようにする（引数を足す）のが筋。
+ * v1.6 は最後の行を「終わり：」で始めていたが、いまは
+ * 「✓」で始まる3行＋「おわりの目安: 」の1行に変わっている。
+ * responseSchema の description 側も同じ文言に揃っていること。
+ * ここが食い違うと、description のほうが勝つ。
  *
- * 4. detail の250字制限
- *    モックには無い。さんたくは列の上限がこれなので外せない。
+ * 【まだ渡せていない材料】
  *
- * 5. estimatedMinutes / category / granularity / difficulty
- *    さんたくにしか無い項目。モックには対応するものが無いので、そのまま残している。
- *
- * 6. プロフィールが固定であること
- *    モックは初回インタビューの回答が入る。
- *    さんたくは同じ仕組み（F-02）がまだ無いので、下の3行はコードに書いた固定値。
+ * ・迷い時間（押してから決めるまでの秒数）。いまはログに出しているだけ。
  */
 @Component
 public class PromptBuilder {
 
 	/** プロンプトの版。直したら必ず上げる */
-	private static final String VERSION = "v3.2";
+	private static final String VERSION = "v4.1";
 
-	/** 日付の書き方。モックの「2026-09-24 14時ごろ」に合わせている */
+	/** 日付の書き方 */
 	private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-
-	/**
-	 * 本人の情報。初回ヒアリング（F-02）を作るまでの仮置き。
-	 *
-	 * モックの3項目と同じ形にしてある。選べる値もモックに合わせた。
-	 * 　主な用途　　　　：しごと / べんきょう / くらし・プライベート
-	 * 　好きなすすめ方　：かんたんなものから / 締切がちかいものから / だいじなものから
-	 * 　1回の集中時間　 ：15分くらい / 30分〜1時間 / がっつり長時間
-	 *
-	 * ここに「自炊」「休日」のような話題を書き足さないこと。
-	 * 書いた瞬間、AI はタスク一覧を見ずにそこから中身を作りはじめる。
-	 * 「キャベツを一枚ちぎって洗う」「米を洗う」は、前の版の「自炊」の行から出ていた。
-	 */
-	private static final String PROFILE = """
-			- 主な用途: べんきょう
-			- 好きなすすめ方: かんたんなものから
-			- 1回の集中時間: 30分〜1時間
-			""";
 
 	/**
 	 * 3案を出してもらうための文章を組み立てる。
@@ -109,12 +77,15 @@ public class PromptBuilder {
 	 * 　役割 → 材料 → 指示 → 出力ルール
 	 * Gemini は後ろに書いた指示ほど守るので、出力ルールを最後に置く。
 	 *
-	 * @param situation   いまの状況。SituationJudge が時刻から判断したもの
-	 * @param activeTasks いま未完了のタスク。提案の材料になる
-	 * @param pickedTask  3件目にそのまま使うタスク。1件も無ければ null
+	 * @param situation     いまの状況。SituationJudge が時刻から判断したもの
+	 * @param activeTasks   いま未完了のタスク。提案の材料になる
+	 * @param pickedTask    3件目にそのまま使うタスク。1件も無ければ null
+	 * @param doneTasks     最近やったこと。新しい順。繰り返しを避けるための材料
+	 * @param excludeTitles 今回は出さないもの。「別の案を見る」のとき前回の3件が入る
 	 * @return AI に送る文章
 	 */
-	public String buildProposal(Situation situation, List<Task> activeTasks, Task pickedTask) {
+	public String buildProposal(Situation situation, List<Task> activeTasks, Task pickedTask,
+			List<Task> doneTasks, List<String> excludeTitles) {
 
 		LocalDateTime now = LocalDateTime.now();
 		StringBuilder p = new StringBuilder();
@@ -123,88 +94,185 @@ public class PromptBuilder {
 
 		p.append("# prompt ").append(VERSION).append("\n\n");
 
-		p.append("あなたは日本語のタスク管理アプリのやさしいコーチです。");
-		p.append("ユーザーが「今やるべきタスク」を3件、JSONで提案してください。\n\n");
+		p.append("あなたは、動き出せない人のそばにいる人です。");
+		p.append("動けるような励ましのタスクを作成してください。\n\n");
 
 		// --- 材料 ---
 
-		p.append("## ユーザーのプロフィール\n");
-		p.append(PROFILE).append("\n");
-
-		p.append("## いま(日本時間)\n");
+		p.append("【今の状況】\n");
 		p.append(now.format(DATE_FORMAT)).append(" ").append(now.getHour()).append("時ごろ\n");
-		p.append("時間帯: ").append(situation.getTimeOfDay()).append("\n");
-		p.append("方針: ").append(situation.getNote()).append("\n\n");
+		p.append("時間帯：").append(situation.getTimeOfDay()).append("\n");
+		p.append("方針：").append(situation.getNote()).append("\n\n");
 
-		p.append("## 未完了のタスク一覧\n");
+		p.append("【今かかえていること】\n");
 		if (activeTasks.isEmpty()) {
-			p.append("(未完了のタスクはありません)\n\n");
+			p.append("（まだ1件もありません）\n\n");
 		} else {
 			for (Task task : activeTasks) {
-				p.append("- ").append(task.getTitle());
-				p.append(" | 締切:").append(task.getDueDate() != null ? task.getDueDate() : "なし");
+				p.append("・").append(task.getTitle());
+				if (task.getDueDate() != null) {
+					p.append("（締切 ").append(task.getDueDate()).append("）");
+				}
 				p.append("\n");
 			}
 			p.append("\n");
 		}
 
-		p.append("## 3件目に使うタスク(アプリが決定ずみ)\n");
-		p.append(pickedTask != null ? pickedTask.getTitle() : "(なし)").append("\n\n");
+		// 完了したものも材料に入れる。
+		// 未完了だけだと「まだ手を付けていないもの」に偏るうえ、
+		// AI は過去を知らないまま「新しい案」を作るので、前と同じものが出てくる。
+
+		p.append("【最近やったこと】\n");
+		if (doneTasks.isEmpty()) {
+			p.append("（まだありません）\n\n");
+		} else {
+			for (Task task : doneTasks) {
+				p.append("・").append(task.getTitle()).append("\n");
+			}
+			p.append("\n");
+		}
+
+		// 「別の案を見る」を押したときだけ中身が入る。
+		// 前回の3件を控えずに呼び直すと、同じ材料・同じ指示なので似たものが返る。
+
+		p.append("【今回は出さないもの】\n");
+		if (excludeTitles.isEmpty()) {
+			p.append("（特になし）\n\n");
+		} else {
+			for (String title : excludeTitles) {
+				p.append("・").append(title).append("\n");
+			}
+			p.append("\n");
+		}
+
+		p.append("【3つ目に使うタスク】\n");
+		p.append(pickedTask != null ? pickedTask.getTitle() : "（なし）").append("\n\n");
 
 		// --- 指示 ---
 		//
 		// 定義をルールより先に置いている。
 		// 「タスクとは何か」が決まっていないと、重さや形を指定しても意味がないため。
-		//
-		// 3つ目の条件は「終わったあとに何かが残る」。
-		// WorkLog（Day 5）の文面そのまま。これ以上強くしない。
-		// 強くすると、一覧に紐づかないものが全部落ちて、3案が同じ話題に寄る。
-		//
-		// 「買いに行く・移動する・待つ」は、独立した禁止ではなく条件2の中に置いた。
-		// 定義から出てくるものなら、禁止リストを増やしたことにならない。
 
-		p.append("## このアプリでの「タスク」の定義\n");
+		p.append("【このアプリでの「タスク」の定義】\n");
 		p.append("次の3つを全部満たすものだけを、タスクと呼びます。\n");
-		p.append("1. 書いてあることだけをやれば「終わった」と言い切れる。\n");
-		p.append("　 どこまでやれば終わりかが、文に書いてある。\n");
-		p.append("2. 今いる場所で、何も決めず、何も探さずに始められる。\n");
-		p.append("　 買いに行く・どこかへ移動する・誰かの返事を待つ、が必要なものは出さない。\n");
-		p.append("3. 終わったあとに、何かが残る。\n\n");
+		p.append("1. 書いてあることだけをやれば「完了した」と言い切れる。\n");
+		p.append("　 どこまでやれば完了かが、文に書いてある。\n");
+		p.append("2. 今いる場所で、すぐに始められる。\n");
+		p.append("3. 終わったあとに、何かをやった感じが残る。\n\n");
 
-		p.append("## ルール\n");
-		p.append("1. 1件目は estimatedMinutes 3〜10分の「新しい提案」。");
-		p.append("今日はもう動けないと思っている人でも手が出るもの。");
-		p.append("未完了の一覧に無いことでよい。\n");
-		p.append("2. 2件目は estimatedMinutes 20〜60分の「気分がかわる新しい提案」。");
-		p.append("1件目とも3件目とも違う話題にする。");
-		p.append("いまの時間帯に合う、そのユーザーらしい具体的な内容にする。");
-		p.append("ありきたりにしない。未完了の一覧に無いことでよい。\n");
-		p.append("3. 3件目は上の「3件目に使うタスク」。title は一字も変えずに使い、detail だけ書く。");
-		p.append("「(なし)」のときは3件目も新しい提案にする。\n");
-		p.append("4. reasonは「なぜ今これか」を日本語20文字程度で、タスクの内容にふれて書く。\n");
-		p.append("5. detailは**そのタスクの内容に合わせた具体的な手順**。");
-		p.append("「✓」で始まる行を3行、最後に「おわりの目安: 〜」の行（この行に✓は付けない）。");
-		p.append("改行は\\n。全体250字以内。");
-		p.append("「まず手をつける」「小さく分ける」のような一般論だけの手順は禁止。");
-		p.append("例えば「クリーニング」なら「✓出す服をまとめて袋に入れる」");
-		p.append("「✓営業時間をしらべる」のように書く。\n");
-		p.append("6. titleは、やることがそのまま分かる短い一文(30字以内)。");
-		p.append("「整える」「見直す」「がんばる」のような、どこで終わりか分からない言葉は使わない。\n");
-		p.append("7. 3件は話題を別々にする。");
-		p.append("category のラベルだけ変えて、中身が同じ話題なのは違反。\n");
-		p.append("8. 出力はJSONだけ。説明文・コードフェンス禁止。\n\n");
+		p.append("【3つの案】\n");
+		p.append("estimatedMinutes は、次の範囲を必ず守ってください。\n");
+		p.append("1つ目：3〜10分。今日はもう動けないと思っている人でも手が出るもの。\n");
+		p.append("2つ目：20〜60分。ちょっとの時間をつくればできること。\n");
+		p.append("　　　　1つ目とも3つ目とも違う話題にする。\n");
+		p.append("3つ目：上に指定したタスクです。title は一字も変えずにそのまま使い、\n");
+		p.append("　　　　detail（完了のヒント）だけを書いてください。\n");
+		p.append("　　　　estimatedMinutes と difficulty は、その内容から見積もってください。\n");
+		p.append("　　　　「（なし）」のときは、3つ目も新しい案にしてください。\n\n");
+		p.append("3案のうち1案は外出や運動など活動的な内容を提案する。\n\n");
+
+		// title の付け方。
+		// 前置きの言葉はアプリが用意する。AI が決めるのは後ろの行動だけ。
+		//
+		// 例として見せているのではなく、選択肢として渡している。
+		// そのまま使われて構わない。むしろ揃っているほうが読みやすい。
+
+		p.append("【title の付け方】\n");
+		p.append("title は一文にしてください。中黒（・）や記号で言葉をつなげてはいけません。\n");
+		p.append("例：ランチ後の短時間ウォーキング\n");
+		p.append("　　朝の集中力アップのためにコーヒーを飲む\n\n");
+
+		p.append(situation.getTimeOfDay()).append("の言葉\n");
+		p.append(wordsFor(situation.getTimeOfDay())).append("\n\n");
+
+		p.append("上の言葉は変えて構いません。\n");
+		p.append("3案は必ず違うタスクにしてください。\n");
+		p.append("時間帯の言葉とスムーズにつながる内容にしてください。\n");
+		p.append("時間帯の言葉とスムーズに言葉がつながらないわかりにくいタスクは禁止。\n\n");
+
+		p.append("【granularity の決め方】\n");
+		p.append("FIVE_MIN＝10分以内 ／ TODAY＝今日中に終わる ／ GROUP＝複数回に分かれる\n");
+		p.append("estimatedMinutes と食い違わせないでください。\n\n");
+
+		p.append("【守ること】\n");
+		p.append("・やってみたいと思われるようなタスクを、");
+		p.append("プロのタスクコーチとして考えてください。\n");
+		p.append("・短時間とか集中とか、タスクをしやすくなる言葉を入れる。\n");
+		p.append("・【最近やったこと】と【今回は出さないもの】に並んでいるものと、\n");
+		p.append("　同じ内容・同じ道具・同じ場所を使う案は出さない。\n\n");
+
+		p.append("【title と detail の関係】\n");
+		p.append("title は、選ぶときに見るものです。detail の要約である必要はありません。\n");
+		p.append("その案が何なのかが分かるシンプルな言葉にしてください。\n");
+		p.append("detail は、選んだあとに手を動かすためのものなので、");
+		p.append("title より具体的にしてください。\n\n");
+
+		p.append("【detail の書き方】\n");
+		p.append("「✓」で始まる行を3行書いたあと、最後の1行を");
+		p.append("「おわりの目安: 」で始めてください（この行に✓は付けません）。\n");
+		p.append("・✓の行は、1行に1つの動作だけ。「〜する」で終える。\n");
+		p.append("・そのタスクの内容に合わせた具体的な手順にする。");
+		p.append("「まず手をつける」「小さく分ける」のような一般論だけの手順は禁止。\n");
+		p.append("・最後の行は、やり終えたときに目で見える状態を書く。\n");
+		p.append("・その状態になったら、本人がどう思っていても終わりです。");
+		p.append("そう書けるものだけを書く。\n");
+		p.append("・行の区切りは改行（\\n）にする。\n");
+		p.append("・全体で250字を超えないようにする。保存できる上限が決まっているため。\n");
+		p.append("例：\n");
+		p.append("　　✓近くの公園をさがす\n");
+		p.append("　　✓10分間ウォーキングする\n");
+		p.append("　　✓新しいことを見つける\n");
+		p.append("　　おわりの目安: 10分たったら\n\n");
 
 		// --- 出力ルール ---
 
-		p.append("## 出力形式\n");
-		p.append("category は 生活・勉強・食事・休日 のいずれか。");
-		p.append("granularity は FIVE_MIN(10分以内)・TODAY(今日中)・GROUP(複数回)。");
-		p.append("difficulty は LOW・MID・HIGH。\n");
-		p.append("{\"cards\":[{\"title\":\"タスク名\",\"category\":\"勉強\",");
-		p.append("\"granularity\":\"FIVE_MIN\",\"difficulty\":\"LOW\",\"estimatedMinutes\":5,");
-		p.append("\"reason\":\"締切が近いから\",");
-		p.append("\"detail\":\"✓手順1\\\\n✓手順2\\\\n✓手順3\\\\nおわりの目安: 〜になったら完了\"}]}\n");
+		p.append("【出力】\n");
+		p.append("cards という配列に3件。1つ目・2つ目・3つ目は上の重さの順に並べる。\n");
+		p.append("各件は次の項目を持つ。\n");
+		p.append("title（30字以内）／category（生活・勉強・食事・休日 のいずれか）／\n");
+		p.append("granularity（FIVE_MIN・TODAY・GROUP）／difficulty（LOW・MID・HIGH）／\n");
+		p.append("estimatedMinutes（整数）／reason（40字以内）／detail（上の書き方）\n");
+		p.append("出力はJSONだけ。説明文・コードフェンス禁止。\n");
 
 		return p.toString();
+	}
+
+	/**
+	 * その時間帯に使う前置きの言葉を返す。
+	 *
+	 * v1.6 では4時間帯ぶんを全部渡していたが、
+	 * 朝に「今夜のメインイベント」が見えている必要はないので、
+	 * いまの時間帯のぶんだけにしている。
+	 *
+	 * 言葉を足したり削ったりするのは、ここを直すだけで済む。
+	 *
+	 * @param timeOfDay SituationJudge が決めた時間帯。朝・昼・夜・深夜
+	 * @return 前置きの候補
+	 */
+	private String wordsFor(String timeOfDay) {
+
+		return switch (timeOfDay) {
+
+			// 立ち上げ・スイッチオン
+			case "朝" -> """
+					　朝の集中力アップのため／出かける前にサクッと／気持ちよく1日を始めるため""";
+
+			// 仕切り直し・リフレッシュ
+			case "昼" -> """
+					　午後のリフレッシュ／午後の集中力アップ／ランチ後の""";
+
+			// アクティブ・集中・自分の時間
+			case "夜" -> """
+					　夜活スタート／夜の集中力復活のために／夜のギア上げ""";
+
+			// レビュー・労い・ログ
+			case "深夜" -> """
+					　夜のreview／今日のごほうび／寝る前のリラックス""";
+
+			// 想定外の値が来たとき。止めずに続ける。
+			// SituationJudge は4つしか返さないので、ここは通らないはず。
+			// それでも default が無いと switch 式はコンパイルできない
+			default -> "　（いまの時間帯に合う言葉を、考えて提案）";
+		};
 	}
 }

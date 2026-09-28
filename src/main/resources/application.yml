@@ -8,6 +8,10 @@ spring:
     active: prod
   jpa:
     open-in-view: false
+  web:
+    error:
+      include-stacktrace: never
+      include-message: never
   security:
     oauth2:
       client:

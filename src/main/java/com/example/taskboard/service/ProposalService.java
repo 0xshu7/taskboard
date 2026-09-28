@@ -5,6 +5,7 @@ package com.example.taskboard.service;
 // java.time.LocalDateTime … 日付＋時刻。作った時刻・決めた時刻に使う
 // java.time.LocalTime     … 時刻だけ。いまが朝か夜かの判定に渡す
 // java.util.List          … リストの型
+// java.util.Random        … くじ引き
 //
 // 以下は Spring の部品。
 // Service       … 処理のまとまりです、という印。Spring が管理下に置く
@@ -17,6 +18,7 @@ package com.example.taskboard.service;
 // ProposalCard           … 提案カード1枚
 // ProposalSet            … 提案1セット
 // ProposalStatus         … セットの状態
+// NotFoundException      … 見つからないときの例外。404で返る
 // Situation              … いまの状況（時間帯と方針）
 // SituationJudge         … 時刻から状況を判断する
 // ProposalCardRepository … カードの出し入れ
@@ -38,10 +40,12 @@ import com.example.taskboard.domain.ProposalCard;
 import com.example.taskboard.domain.ProposalSet;
 import com.example.taskboard.domain.ProposalStatus;
 import com.example.taskboard.domain.Task;
+import com.example.taskboard.exception.NotFoundException;
 import com.example.taskboard.logic.Situation;
 import com.example.taskboard.logic.SituationJudge;
 import com.example.taskboard.repository.ProposalCardRepository;
 import com.example.taskboard.repository.ProposalSetRepository;
+
 /**
  * スタートを押してから、3案を出し、選ぶまでを受け持つ。
  *
@@ -70,11 +74,41 @@ import com.example.taskboard.repository.ProposalSetRepository;
  * 呼び出しに失敗した場合は FallbackCards の固定3案に切り替える。
  * どこから来た3案かは ProposalSet.source に残すので、
  * あとから「AI が何割失敗したか」を数えられる。
+ *
+ * 【AI に渡す材料】
+ *
+ * 未完了の一覧だけでなく、完了したタスクと、前回出した3案も渡す。
+ *
+ * 未完了は「まだ手を付けていないもの」なので偏る。
+ * そして完了を渡さないと、AI は過去を知らないまま「新しい案」を作ることになり、
+ * 前にやったものと同じ内容が「あたらしい」として出てくる。
+ *
+ * 【他人のものに触れないようにする】
+ *
+ * 1件を取り出す入口は2つだけにしてある。
+ *
+ * 　セット … findSet
+ * 　カード … findCard
+ *
+ * どちらも所有者を確かめてから返す。
+ * repository を直接呼ぶと、その確認を素通りすることになるので、
+ * このクラスの中でも repository.findById は上の2つ以外では使わない。
+ *
+ * TaskService.findById と同じ作りにしてある。
+ * 同じ形の穴を、片方だけ塞いで終わりにしないため。
  */
 @Service
 public class ProposalService {
 
 	// ===== フィールド =====
+
+	/**
+	 * 「最近やったこと」として AI に渡す件数。
+	 *
+	 * 全部渡すと、続けるほどプロンプトが長くなり、
+	 * 古いものが効きすぎて提案の幅が狭くなる。
+	 */
+	private static final int RECENT_DONE_LIMIT = 10;
 
 	/** 提案セットの出し入れ */
 	private final ProposalSetRepository setRepository;
@@ -87,6 +121,7 @@ public class ProposalService {
 
 	/** AI に送る文章を組み立てる */
 	private final PromptBuilder promptBuilder;
+
 	/**
 	 * 3つ目に使うタスクを選ぶためのくじ引き。
 	 *
@@ -94,6 +129,7 @@ public class ProposalService {
 	 * 1つ作って使い回す。
 	 */
 	private final Random random = new Random();
+
 	/**
 	 * 3案を作る係。
 	 *
@@ -147,7 +183,17 @@ public class ProposalService {
 	 */
 	@Transactional
 	public ProposalSet start() {
-		return generateSet();
+		return generateSet(List.of());
+	}
+
+	/**
+	 * 3案を作って保存する。除外するものが無いとき用。
+	 *
+	 * @return 保存した3案のセット
+	 */
+	@Transactional
+	public ProposalSet generateSet() {
+		return generateSet(List.of());
 	}
 
 	/**
@@ -159,10 +205,11 @@ public class ProposalService {
 	 * 応答にかかった時間と、どこから来た3案かをログに出す。
 	 * 速さの改善は、推測ではなく計測して判断する。
 	 *
+	 * @param excludeTitles 今回は出さないもの。「別の案を見る」のとき前回の3件が入る
 	 * @return 保存した3案のセット
 	 */
 	@Transactional
-	public ProposalSet generateSet() {
+	public ProposalSet generateSet(List<String> excludeTitles) {
 
 		Long userId = userService.currentId();
 
@@ -175,15 +222,30 @@ public class ProposalService {
 		//
 		// 選び方はくじ引き。締切順などにすると、同じものばかり出て埋もれ直す。
 		// 1件も無ければ null で、そのときは3案とも新しい案になる。
+		//
+		// findActive はログイン中の本人のぶんだけを返すので、
+		// ここに他人のタスクが混ざることはない。AIへ送る材料も本人のものだけになる。
 		List<Task> activeTasks = taskService.findActive();
 		Task pickedTask = pickOne(activeTasks);
 
-		String prompt = promptBuilder.buildProposal(situation, activeTasks, pickedTask);
+		// 完了したものも材料に入れる。
+		// これが無いと、AI は過去を知らないまま「新しい案」を作ることになり、
+		// 前にやったものと同じ内容が出てくる。
+		List<Task> doneTasks = recentDone();
+
+		String prompt = promptBuilder.buildProposal(
+				situation, activeTasks, pickedTask, doneTasks, excludeTitles);
+
 		List<ProposalCard> cards;
 		String source;
 
 		long begin = System.currentTimeMillis();
 
+		// この catch が受けるのは、AI の呼び出しの失敗だけ。
+		// try の中には generator.generate しか入れていないので、
+		// 所有者の確認で投げる NotFoundException がここに紛れ込むことはない。
+		// 範囲を広げると、見つからなかったことまで「AIの失敗」として
+		// 固定3案にすり替わり、原因が見えなくなる。
 		try {
 			cards = generator.generate(prompt);
 			source = generator.sourceName();
@@ -233,30 +295,90 @@ public class ProposalService {
 		return set;
 	}
 
+	// ===== メソッド（取り出す） =====
+
 	/**
 	 * セットを1件取り出す。
 	 *
-	 * 見つからないときは例外を投げる。
-	 * null を返すと、受け取った側が確認を忘れたときに
-	 * ずっと先で分かりにくい形で失敗するため、その場で止める。
+	 * 他人のセットは取り出せない。
+	 *
+	 * 画面に出ていなくても、URL の番号を書き換えれば手が届く。
+	 * /proposals/999 の 999 を他人のセットにすれば、その3案が読めてしまう。
+	 * 3枚目には本人のタスク名がそのまま入るので、他人のタスクを読むことにもなる。
+	 *
+	 * 見えないことと、触れないことは別。
+	 * セットを扱うすべての処理がこのメソッドを通るので、確認はここに1か所だけ置く。
+	 *
+	 * 他人のものだったときも「見つかりません」と同じ扱いにしている。
+	 * 「あなたのものではありません」と返すと、
+	 * その番号のセットが存在することを相手に教えることになる。
+	 *
+	 * NotFoundException は 404 で返る。
+	 * 以前は IllegalArgumentException を投げていたが、それは 500（サーバーの不具合）になる。
+	 * 壊れていないのに壊れたと言うと、本当に壊れたときに見分けがつかない。
 	 *
 	 * @param setId セットのID
 	 * @return 見つかったセット
+	 * @throws NotFoundException 無いか、他人のものだったとき
 	 */
 	public ProposalSet findSet(Long setId) {
-		return setRepository.findById(setId)
-				.orElseThrow(() -> new IllegalArgumentException("提案が見つかりません: " + setId));
+
+		ProposalSet set = setRepository.findById(setId)
+				.orElseThrow(() -> new NotFoundException("提案が見つかりません: " + setId));
+
+		if (!set.getUserId().equals(userService.currentId())) {
+			throw new NotFoundException("提案が見つかりません: " + setId);
+		}
+		return set;
 	}
 
 	/**
 	 * セットに属する3枚のカードを、表示順で取り出す。
 	 *
+	 * 先に findSet を通して所有者を確かめている。
+	 * カードを setId だけで引くと、他人のセットの中身がそのまま読めてしまう。
+	 *
 	 * @param setId セットのID
 	 * @return 1番目から順に並んだカード
+	 * @throws NotFoundException セットが無いか、他人のものだったとき
 	 */
 	public List<ProposalCard> findCards(Long setId) {
+
+		findSet(setId);
+
 		return cardRepository.findByProposalSetIdOrderByPositionAsc(setId);
 	}
+
+	/**
+	 * カードを1枚取り出す。
+	 *
+	 * 他人のカードは取り出せない。
+	 *
+	 * 確認は2段階。
+	 * 1. セットが本人のものか（findSet を通って渡ってきている）
+	 * 2. そのカードが、このセットのものか
+	 *
+	 * 2つ目が要るのは、セットとカードのIDが別々に送られてくるため。
+	 * 自分のセットIDと、他人のカードIDを組み合わせて送ることができる。
+	 * セットだけ確かめて満足すると、そこが空く。
+	 *
+	 * @param set    所有者を確認ずみのセット
+	 * @param cardId カードのID
+	 * @return 見つかったカード
+	 * @throws NotFoundException 無いか、そのセットのものでなかったとき
+	 */
+	private ProposalCard findCard(ProposalSet set, Long cardId) {
+
+		ProposalCard card = cardRepository.findById(cardId)
+				.orElseThrow(() -> new NotFoundException("カードが見つかりません: " + cardId));
+
+		if (!card.getProposalSetId().equals(set.getId())) {
+			throw new NotFoundException("カードが見つかりません: " + cardId);
+		}
+		return card;
+	}
+
+	// ===== メソッド（選ばれたときの後始末） =====
 
 	/**
 	 * カードを1つ選んだとき。タスクを作り、セットを決定済みにする。
@@ -266,14 +388,13 @@ public class ProposalService {
 	 *
 	 * @param setId  セットのID
 	 * @param cardId 選ばれたカードのID
+	 * @throws NotFoundException セットかカードが無いか、他人のものだったとき
 	 */
 	@Transactional
 	public void choose(Long setId, Long cardId) {
 
 		ProposalSet set = findSet(setId);
-
-		ProposalCard card = cardRepository.findById(cardId)
-				.orElseThrow(() -> new IllegalArgumentException("カードが見つかりません: " + cardId));
+		ProposalCard card = findCard(set, cardId);
 
 		// 選ばれた印を付ける
 		card.setChosen(true);
@@ -297,25 +418,36 @@ public class ProposalService {
 	}
 
 	/**
-	 * 「別の話題にする」を押したとき。いまのセットを閉じて、新しく作り直す。
+	 * 「別の案を見る」を押したとき。いまのセットを閉じて、新しく作り直す。
 	 *
 	 * 閉じたセットも記録として残す。
 	 * 何が選ばれなかったかは、提案を良くするための手がかりになる。
 	 *
+	 * 閉じる前に、いま画面に出ている3件の title を控えて次へ渡す。
+	 * 控えずに呼び直すと、同じ材料・同じ指示で呼ぶことになるので、
+	 * 似たものが返ってきて当然だった。
+	 *
 	 * @param setId 閉じるセットのID
 	 * @return 新しく用意したセット
+	 * @throws NotFoundException セットが無いか、他人のものだったとき
 	 */
 	@Transactional
 	public ProposalSet retopic(Long setId) {
 
 		ProposalSet set = findSet(setId);
+
+		// findCards は中で findSet を通るので、ここでも所有者は確かめられている
+		List<String> shown = findCards(setId).stream()
+				.map(ProposalCard::getTitle)
+				.toList();
+
 		set.setStatus(ProposalStatus.RETOPIC);
 		set.setDecidedAt(LocalDateTime.now());
 		setRepository.save(set);
 
 		printHesitation(set);
 
-		return generateSet();
+		return generateSet(shown);
 	}
 
 	// ===== メソッド（内部で使うもの） =====
@@ -341,6 +473,25 @@ public class ProposalService {
 
 		System.out.println("### 迷い時間 = " + seconds + "秒 / 結果 = " + set.getStatus());
 	}
+
+	/**
+	 * 最近やったことを、新しい順に少しだけ取り出す。
+	 *
+	 * findDone は本人のぶんだけを新しい順に返すので、
+	 * 先頭から必要な数だけ取ればよい。
+	 *
+	 * @return 完了したタスク。多くても RECENT_DONE_LIMIT 件
+	 */
+	private List<Task> recentDone() {
+
+		List<Task> done = taskService.findDone();
+
+		if (done.size() <= RECENT_DONE_LIMIT) {
+			return done;
+		}
+		return done.subList(0, RECENT_DONE_LIMIT);
+	}
+
 	/**
 	 * 未完了のタスクから1件、ランダムに選ぶ。
 	 *

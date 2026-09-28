@@ -1,20 +1,28 @@
 /*
- * 音と花吹雪。
+ * 音と紙ふぶき。
  *
- * 音量は <body data-volume="50"> から読む。設定画面で保存した値が入っている。
- * 0 のときは鳴らさない。
+ * 入切は <body data-sound="true" data-confetti="false"> から読む。
+ * 設定画面で保存した値が入っている。
+ *
+ * 音量は固定にしてある。
+ * 効果音は一瞬鳴るだけで、途中の値を選ぶ場面が無かったため、
+ * 設定から音量を外した。大きすぎるときは端末側で下げられる。
  */
 
-// ===== 音量 =====
+// ===== 設定を読む =====
 
-// body の data-volume を 0〜1 の値にする。無ければ 0.5（半分）
-const VOLUME = (function () {
-	const raw = document.body.dataset.volume;
-	if (raw === undefined) {
-		return 0.5;
-	}
-	return Number(raw) / 100;
-})();
+// 効果音の音量。0〜1。以前は設定画面のつまみから読んでいた
+const VOLUME = 0.5;
+
+// 効果音を鳴らすか。
+//
+// data 属性は文字列で入るので、"false" かどうかで見る。
+// 属性そのものが無いとき（undefined）も true になる。
+// 設定を読めなかったときに黙って無音になるより、鳴るほうが気づける
+const SOUND_ON = document.body.dataset.sound !== "false";
+
+// 紙ふぶきを出すか。考え方は上と同じ
+const CONFETTI_ON = document.body.dataset.confetti !== "false";
 
 // 同じ音を何度も読み込まないように、一度作ったものを取っておく
 const soundCache = {};
@@ -23,8 +31,9 @@ const soundCache = {};
  * 音を鳴らす。name は "start" / "select" / "retopic" / "complete"
  */
 function playSound(name) {
-	if (VOLUME <= 0) {
-		return;                       // 音量ゼロなら何もしない
+
+	if (!SOUND_ON) {
+		return;                       // 切ってあれば何もしない
 	}
 
 	if (!soundCache[name]) {
@@ -39,19 +48,24 @@ function playSound(name) {
 	});
 }
 
-// ===== 花吹雪 =====
+// ===== 紙ふぶき =====
 
 // ブランドの3色に白を足したもの
 const CONFETTI_COLORS = ["#FF2D8A", "#7ED321", "#00C2D1", "#FFFFFF"];
 
-// 花吹雪を出しておく長さ（ミリ秒）と、薄くし始める時刻
+// 紙ふぶきを出しておく長さ（ミリ秒）と、薄くし始める時刻
 const CONFETTI_LIFE = 3800;
 const CONFETTI_FADE_START = 3200;
 
 /**
- * 画面いっぱいに紙吹雪を降らせる
+ * 画面いっぱいに紙ふぶきを降らせる
  */
 function showConfetti() {
+
+	if (!CONFETTI_ON) {
+		return;                       // 切ってあれば何もしない
+	}
+
 	// 画面の一番上に、透明な板を1枚置く
 	const canvas = document.createElement("canvas");
 	canvas.className = "confetti-canvas";
@@ -130,7 +144,7 @@ function showAsDone(form, button) {
 	button.classList.remove("tag-DOING");
 	button.classList.add("tag-DONE");
 
-	// 行そのものも完了の見た目にする（取り消し線などが付く）
+	// 行そのものも完了の見た目にする
 	const row = form.closest(".task");
 	if (row) {
 		row.classList.remove("task-DOING");
@@ -207,7 +221,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 	// --- 状態のボタン ---
 	// 未実施 → 進行中 のときは、スタートと同じ音。
-	// 進行中 → 完了   のときは、完了音と花吹雪。
+	// 進行中 → 完了   のときは、完了音と紙ふぶき。
 	// 完了   → 未実施 のときは、何もしない。
 	document.querySelectorAll(".status-form").forEach(function (form) {
 		const button = form.querySelector("button");
@@ -218,13 +232,13 @@ document.addEventListener("DOMContentLoaded", function () {
 			return;
 		}
 
-		// やり切ったとき。花吹雪を見せたいので長めに待つ
+		// やり切ったとき。紙ふぶきを見せたいので長めに待つ
 		if (button.dataset.celebrate === "true") {
 			form.addEventListener("submit", function (event) {
 				event.preventDefault();
 
 				// サーバの返事を待たずに、画面のほうを先に「完了」にする。
-				// 花吹雪が降っている間、完了になった姿を見てもらうため
+				// 紙ふぶきが降っている間、完了になった姿を見てもらうため
 				showAsDone(form, button);
 
 				playSound("complete");

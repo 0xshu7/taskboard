@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>さんたく</title>
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+  <link rel="icon" th:href="@{/favicon.ico}" sizes="any">
+</head>
+<body>
+
+<div class="container">
+
+  <header class="header">
+    <div th:replace="~{fragments/logo :: appTitle}"></div>
+  </header>
+
+  <!-- 何が起きたかは書かない。
+       内部の事情を画面に出さないという方針（application.yml の
+       spring.web.error.include-message: never）と揃える。
+       状態コードだけ出しておけば、開発中に見分けはつく -->
+  <p class="error-code" th:text="${status}">404</p>
+  <p class="error-text">ページが見つかりませんでした</p>
+
+  <nav class="nav">
+    <a class="btn-start" th:href="@{/}">🚀 スタートにもどる</a>
+  </nav>
+
+</div>
+
+</body>
+</html>

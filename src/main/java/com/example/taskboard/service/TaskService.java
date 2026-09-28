@@ -1,22 +1,5 @@
 package com.example.taskboard.service;
 
-// ===== インポート =====
-// java.time.LocalDate     … 日付だけ。締切に使う
-// java.time.LocalDateTime … 日付＋時刻。自動完了の予定時刻に使う
-// java.util.List          … リストの型
-//
-// 以下は Spring の部品。
-// Value         … application.yml に書いた値を受け取る
-// Service       … 処理のまとまりです、という印。Spring が管理下に置く
-// Transactional … メソッドの途中で失敗したら、その中の保存をすべて取り消す
-//
-// 以下はこのアプリの部品。
-// Difficulty     … 難易度
-// ProposalCard   … 提案カード1枚
-// Task           … タスク1件
-// TaskStatus     … タスクの状態
-// TaskRepository … タスクの出し入れ
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,6 +12,7 @@ import com.example.taskboard.domain.Difficulty;
 import com.example.taskboard.domain.ProposalCard;
 import com.example.taskboard.domain.Task;
 import com.example.taskboard.domain.TaskStatus;
+import com.example.taskboard.exception.NotFoundException;
 import com.example.taskboard.repository.TaskRepository;
 
 /**
@@ -49,6 +33,9 @@ import com.example.taskboard.repository.TaskRepository;
  * 1件を取り出すときは、必ず findById を通す。
  * 他人のタスクかどうかの確認をそこに1か所だけ置いてあるので、
  * repository を直接呼ぶと、その確認を素通りすることになる。
+ *
+ * 例外は1つだけ。createFromCard は ID ではなくカードそのものを受け取るので、
+ * このクラスでは所有者を確かめられない。確認は ProposalService.findCard にある。
  *
  * 状態と完了日時は Task 側が面倒を見ている。
  * setStatus を呼べば完了日時も一緒に動くので、
@@ -162,17 +149,21 @@ public class TaskService {
 	 * 「あなたのものではありません」と返すと、
 	 * その番号のタスクが存在することを相手に教えることになる。
 	 *
+	 * NotFoundException は 404 で返る。
+	 * 以前は IllegalArgumentException を投げていたが、それは 500（サーバーの不具合）になる。
+	 * 壊れていないのに壊れたと言うと、本当に壊れたときに見分けがつかない。
+	 *
 	 * @param id タスクのID
 	 * @return 見つかったタスク
-	 * @throws IllegalArgumentException 無いか、他人のものだったとき
+	 * @throws NotFoundException 無いか、他人のものだったとき
 	 */
 	public Task findById(Long id) {
 
 		Task task = taskRepository.findById(id)
-				.orElseThrow(() -> new IllegalArgumentException("タスクが見つかりません:" + id));
+				.orElseThrow(() -> new NotFoundException("タスクが見つかりません:" + id));
 
 		if (!task.getUserId().equals(userId())) {
-			throw new IllegalArgumentException("タスクが見つかりません:" + id);
+			throw new NotFoundException("タスクが見つかりません:" + id);
 		}
 		return task;
 	}
@@ -305,7 +296,12 @@ public class TaskService {
 	 * カードから写すのは内容・完了のヒント・難易度・かかる時間の4つ。
 	 * 締切は付けない。今すぐ取りかかるものなので、期限を持たせる必要がない。
 	 *
-	 * @param card 選ばれたカード
+	 * このメソッドだけ、IDではなくカードそのものを受け取っている。
+	 * そのため、ここでは「そのカードが本人のものか」を確かめられない。
+	 * 確認は ProposalService.findCard で済ませてから渡している。
+	 * 別の場所からカードを作って渡すと、その確認を飛ばすことになる。
+	 *
+	 * @param card 選ばれたカード。所有者の確認は ProposalService.findCard で済んでいる
 	 * @return 作られたタスク
 	 */
 	@Transactional

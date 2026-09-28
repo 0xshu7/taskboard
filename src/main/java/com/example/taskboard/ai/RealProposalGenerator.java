@@ -289,7 +289,9 @@ public class RealProposalGenerator implements ProposalGenerator {
 
 				"type", "OBJECT",
 				"properties", Map.of(
-						"title",            Map.of("type", "STRING"),
+						"title",            Map.of("type", "STRING",
+						                           "description",
+						                           "「〇〇として、△△する」の一文。〇〇は指定された時間帯の言葉、△△は実際にやること。30字以内。中黒（・）や記号でつながない。ただし「3つ目に使うタスク」をそのまま使う案は、その title を一字も変えずに入れる"),
 						"category",         Map.of("type", "STRING"),
 						"granularity",      Map.of("type", "STRING",
 						                           "enum", List.of("FIVE_MIN", "TODAY", "GROUP")),
