@@ -11,7 +11,8 @@ package com.example.taskboard.controller;
 // 以下はこのアプリの部品。
 // ProposalSet     … 提案1セット
 // ProposalService … スタートから3案、選ぶまでの処理
-// UserService     … 利用者と設定。効果音の音量を画面へ渡すために使う
+// SettingsForm    … 画面へ渡す設定の入れ物
+// UserService     … 利用者と設定
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -51,7 +52,7 @@ public class ProposalController {
 	/** スタートから3案、選ぶまでの処理 */
 	private final ProposalService proposalService;
 
-	/** 利用者と設定。効果音の音量を画面へ渡すために使う */
+	/** 利用者と設定 */
 	private final UserService userService;
 
 	// ===== コンストラクタ =====
@@ -70,6 +71,13 @@ public class ProposalController {
 	/**
 	 * スタートボタンを押したとき。3案を出して、その画面へ移る。
 	 *
+	 * 最初の3問に答えていなければ、先に質問画面へ送る。
+	 * 見るのはここ1か所だけ。初回もリセット後も同じ道を通るので、
+	 * 「どこで聞くか」を2つ持たずに済む。
+	 *
+	 * ログインした直後ではなく、押したときに見ている。
+	 * 開いただけで質問が始まると、何のアプリか分からないまま答えることになる。
+	 *
 	 * 押されてから作るので、AIの応答を待つ4〜5秒がかかる。
 	 * その間は画面側でオーバーレイを出している（effects.js）。
 	 *
@@ -77,10 +85,14 @@ public class ProposalController {
 	 * 1回のスタートでAIを2回呼ぶことになり、無料枠が実質半分になっていた。
 	 * 待ち時間は演出で埋められるが、枠は埋められないので、作りおきはやめた。
 	 *
-	 * @return できたセットの画面へ移る
+	 * @return できたセットの画面へ移る。未回答なら質問画面へ
 	 */
 	@PostMapping("/proposals")
 	public String start() {
+
+		if (!userService.current().hasProfile()) {
+			return "redirect:/profile";
+		}
 
 		ProposalSet set = proposalService.start();
 
@@ -107,7 +119,6 @@ public class ProposalController {
 		model.addAttribute("set", proposalService.findSet(setId));
 		model.addAttribute("cards", proposalService.findCards(setId));
 
-		// 効果音の音量。画面の body に渡し、JavaScript がそこから読む
 		// 設定は入れ物ごと渡す。項目が増えても、この行は変わらない
 		model.addAttribute("settings", SettingsForm.from(userService.current()));
 

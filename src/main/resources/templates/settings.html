@@ -109,7 +109,24 @@
 
 			<p class="note">スタートや完了のときの音と、お祝いの紙ふぶきです。</p>
 		</div>
+		<!-- ===== 最初の3問 ===== -->
+		<!--
+			消すだけで、質問画面へは送らない。
+			次にスタートを押したときに、関所が自動でここへ送る。
+			同じ判定を2か所に持たずに済む
+		-->
+		<h2 class="section">AIタスク提案</h2>
 
+		<div class="field">
+			<p class="note">
+				主な用途・すすめ方・集中時間。「やりなおす」で次回スタート時に質問からやりなおせます。
+			</p>
+
+			<form th:action="@{/profile/reset}" method="post" class="logout-form"
+			      onsubmit="return confirm('答えを消して、最初の質問からやり直します。よろしいですか？')">
+				<button type="submit" class="btn-logout">やりなおす</button>
+			</form>
+		</div>
 		<div class="field">
 			<p class="note">
 				このアプリでは、タスク案の作成に Gemini Developer API を使用しています。<br>

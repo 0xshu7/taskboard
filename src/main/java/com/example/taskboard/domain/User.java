@@ -34,12 +34,34 @@ import jakarta.persistence.Table;
  * Googleに要求しているのは openid だけなので、受け取るのは sub という識別子1つ。
  * メールアドレスも名前も送られてこないし、保存もしない。
  *
- * 持っているのは5つだけ。
+ * 持っているのは8つ。
  *   id              … 内部の番号
  *   googleSub       … ログインした人を見分ける鍵
  *   createdAt       … いつ登録されたか
  *   soundEnabled    … 効果音を鳴らすか
  *   confettiEnabled … 紙ふぶきを出すか
+ *   mainUse         … 主な用途（最初の3択その1）
+ *   orderPref       … すすめ方の好み（その2）
+ *   focusLevel      … 1回の集中時間（その3）
+ *
+ * 【最初の3択について】
+ *
+ * 初回に3問だけ聞いて、その答えをそのまま持つ。
+ * 文章で持つ「本人メモ」は作らない。
+ *
+ * 文章にすると、AI に渡したときに効きすぎる。
+ * 3行のプロフィールを渡しただけで、AI がタスク一覧を見ずに
+ * そこから中身を作り始めたことがあった。
+ *
+ * ここに入るのは、アプリ側のロジックが読む値だけ。
+ * AI には渡さない。渡すのは「その結果どの分野を出すか」だけになる。
+ *
+ * mainUse に入るのは分野の名前そのもの（べんきょう / せいかつ / リラックス）。
+ * カテゴリと同じ言葉にしてあるので、対応表をどこにも持たなくてよい。
+ *
+ * 「答えたかどうか」の列は作らない。
+ * 3つとも同時に保存するので、値が入っているかどうかで判断できる。
+ * 別に持つと、片方だけ更新されて食い違う。
  *
  * 設定は「入れるか入れないか」だけにしてある。
  * 以前は音量を 0〜100 で持っていたが、効果音は一瞬鳴るだけで、
@@ -111,6 +133,37 @@ public class User {
 	@Column(name = "confetti_enabled")
 	private Boolean confettiEnabled = true;
 
+	/**
+	 * 主な用途。べんきょう / せいかつ / リラックス。未回答なら null。
+	 *
+	 * SituationJudge が、この分野の点数を上げる。
+	 * 分野の名前そのものを入れているので、変換表が要らない。
+	 */
+	@Column(name = "main_use", length = 20)
+	private String mainUse;
+
+	/**
+	 * すすめ方の好み。EASY / DUE / OLD。未回答なら null。
+	 *
+	 * 3件目に使うタスクの選び方が変わる。
+	 * 　EASY … かんたんなもの（見積りの短い順）
+	 * 　DUE  … 締切が近い順
+	 * 　OLD  … 残っているもの（登録の古い順）
+	 */
+	@Column(name = "order_pref", length = 20)
+	private String orderPref;
+
+	/**
+	 * 1回の集中時間。SHORT / MIDDLE / LONG。未回答なら null。
+	 *
+	 * 2件目の目安時間が変わる。
+	 * 　SHORT  … 10〜20分
+	 * 　MIDDLE … 20〜60分
+	 * 　LONG   … 60〜120分
+	 */
+	@Column(name = "focus_level", length = 20)
+	private String focusLevel;
+
 	// ===== コンストラクタ =====
 	// 自分でコンストラクタを1つでも書くと、Java が自動で用意する
 	// 「引数なしのコンストラクタ」が消える。JPA はそれを必要とするので、手で書き足している。
@@ -155,6 +208,38 @@ public class User {
 		if (createdAt == null) {
 			createdAt = LocalDateTime.now();
 		}
+	}
+
+	// ===== メソッド（最初の3択） =====
+
+	/**
+	 * 最初の3問に答えているかを返す。
+	 *
+	 * 3つは同時に保存するので、1つ見れば足りる。
+	 * スタートを押したときにここを見て、答えていなければ質問画面へ送る。
+	 *
+	 * 「答えたかどうか」の列を別に持つと、
+	 * 答えを消したのに印だけ残る、という食い違いが起きる。
+	 *
+	 * @return 答えていれば true
+	 */
+	public boolean hasProfile() {
+		return mainUse != null;
+	}
+
+	/**
+	 * 最初の3問の答えを消す。
+	 *
+	 * 設定の「答え直す」から呼ばれる。
+	 * 次にスタートを押したとき、質問から始まる。
+	 *
+	 * 3つまとめて消すのをここに置いているのは、
+	 * 1つ消し忘れると「半分だけ答えた」状態になるため。
+	 */
+	public void resetProfile() {
+		this.mainUse = null;
+		this.orderPref = null;
+		this.focusLevel = null;
 	}
 
 	// ===== メソッド（getter / setter） =====
@@ -221,6 +306,36 @@ public class User {
 	 */
 	public void setConfettiEnabled(Boolean confettiEnabled) {
 		this.confettiEnabled = confettiEnabled == null || confettiEnabled;
+	}
+
+	/** 主な用途を返す。未回答なら null */
+	public String getMainUse() {
+		return mainUse;
+	}
+
+	/** 主な用途を入れる */
+	public void setMainUse(String mainUse) {
+		this.mainUse = mainUse;
+	}
+
+	/** すすめ方の好みを返す。未回答なら null */
+	public String getOrderPref() {
+		return orderPref;
+	}
+
+	/** すすめ方の好みを入れる */
+	public void setOrderPref(String orderPref) {
+		this.orderPref = orderPref;
+	}
+
+	/** 1回の集中時間を返す。未回答なら null */
+	public String getFocusLevel() {
+		return focusLevel;
+	}
+
+	/** 1回の集中時間を入れる */
+	public void setFocusLevel(String focusLevel) {
+		this.focusLevel = focusLevel;
 	}
 
 	// ===== メソッド（同じ利用者かどうかの判定） =====

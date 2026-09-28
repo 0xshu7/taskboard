@@ -124,7 +124,7 @@ body {
 /* 提案画面だけ幅を絞る。
    3案を見比べる画面なので、横に伸びると視線の移動が大きくなる */
 .container.proposals {
-  max-width: 560px;
+  max-width: 680px;
 }
 
 /* 設定画面も幅を絞る。
@@ -1362,4 +1362,118 @@ body {
   }
 }
 
+/* --- 最初の3問 --- */
 
+.profile-lead {
+  margin: 4px 0 24px;
+  font-size: 18px;
+  text-align: center;
+  line-height: 1.7;
+}
+
+/* 選択肢は縦に3つ。提案画面の3枚と動きを揃える。
+   横に並べると「締切が近いものから」のような長いラベルで高さがばらつく */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+/* ラベルでラジオボタンを包むと、どこを押しても選べる。
+   .field label の display:block と margin を打ち消すため、ここで指定し直す */
+.choice {
+  display: block;
+  margin: 0;
+  padding: 14px;
+  border: 3px solid var(--ink);
+  border-radius: var(--round);
+  background: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ラジオボタン本体は見せない。
+   display:none にすると押せなくなる環境があるので、透明にして重ねる */
+.choice input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+/* 選ばれたもの。:has は「中にこれを持つ要素」を指す */
+.choice:has(input:checked) {
+  background: var(--pink);
+  color: #fff;
+}
+
+/* キーボードで移動してきたときに、どこにいるか分かるようにする */
+.choice:has(input:focus-visible) {
+  box-shadow: 0 0 0 4px rgba(240, 51, 140, .18);
+}
+
+.choice:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+/* --- 最初の3問 --- */
+
+.profile-lead {
+  margin: 4px 0 8px;
+  font-size: 18px;
+  text-align: center;
+  line-height: 1.7;
+}
+
+/* いま何問目か。控えめに */
+.profile-step {
+  margin: 0 0 20px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* 選択肢は縦に3つ。提案画面の3枚と動きを揃える */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+/* 選択肢そのものが送信ボタン。
+   ボタンは既定の見た目を持っているので、全部指定し直す */
+.choice {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  border: 3px solid var(--ink);
+  border-radius: var(--round);
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.choice:hover {
+  background: #fff0f6;
+}
+
+.choice:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.choices form {
+  margin: 0;
+}

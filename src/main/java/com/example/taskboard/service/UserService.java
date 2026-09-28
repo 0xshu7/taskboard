@@ -106,7 +106,7 @@ public class UserService {
 	/**
 	 * 設定を保存する。
 	 *
-	 * いま保存できるのは効果音の音量だけ。
+	 * いま保存できるのは効果音と紙ふぶきの入切。
 	 * 通知の入切は、届け先を登録するか消すかで決まるので、ここでは扱わない。
 	 *
 	 * 設定項目を増やすときに触るのは3か所。
@@ -120,6 +120,55 @@ public class UserService {
 	public void updateSettings(SettingsForm form) {
 		User user = current();
 		form.apply(user);
+		userRepository.save(user);
+	}
+
+	// ===== メソッド（最初の3択） =====
+
+	/**
+	 * 最初の3問の答えを保存する。
+	 *
+	 * 3つまとめて受け取る。1つずつ保存できるようにすると、
+	 * 途中まで答えた状態が生まれ、hasProfile の判定が当てにならなくなる。
+	 *
+	 * 値の正しさはここでは確かめていない。
+	 * 画面のボタンは決まった値しか送らないが、直接送れば何でも入る。
+	 * 想定外の値が入っても、SituationJudge は「知らない分野」として
+	 * 点数を足さずに流すので、壊れずに既定の動きになる。
+	 * 止めるより、変な値でも動き続けるほうがこの画面には合っている。
+	 *
+	 * @param mainUse    主な用途。べんきょう / せいかつ / リラックス
+	 * @param orderPref  すすめ方。EASY / DUE / OLD
+	 * @param focusLevel 集中時間。SHORT / MIDDLE / LONG
+	 */
+	@Transactional
+	public void saveProfile(String mainUse, String orderPref, String focusLevel) {
+
+		User user = current();
+
+		user.setMainUse(mainUse);
+		user.setOrderPref(orderPref);
+		user.setFocusLevel(focusLevel);
+
+		userRepository.save(user);
+	}
+
+	/**
+	 * 最初の3問の答えを消す。
+	 *
+	 * 設定の「答え直す」から呼ばれる。
+	 * 次にスタートを押したとき、質問から始まる。
+	 *
+	 * 消す手順そのものは User.resetProfile が持っている。
+	 * ここは「誰のものを消すか」を決めて保存するだけ。
+	 */
+	@Transactional
+	public void resetProfile() {
+
+		User user = current();
+
+		user.resetProfile();
+
 		userRepository.save(user);
 	}
 

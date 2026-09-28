@@ -3,6 +3,7 @@ package com.example.taskboard.service;
 // ===== インポート =====
 // java.time.Duration      … 2つの時刻の差。迷い時間の計算に使う
 // java.time.LocalDateTime … 日付＋時刻。作った時刻・決めた時刻、状況の判断に使う
+// java.util.Comparator    … 並べ替えの決まり。3件目の選び方に使う
 // java.util.List          … リストの型
 // java.util.Random        … くじ引き
 //
@@ -17,6 +18,8 @@ package com.example.taskboard.service;
 // ProposalCard           … 提案カード1枚
 // ProposalSet            … 提案1セット
 // ProposalStatus         … セットの状態
+// Task                   … タスク1件
+// User                   … 利用者1人。最初の3択の答えを持っている
 // NotFoundException      … 見つからないときの例外。404で返る
 // Situation              … いまの状況と、出す分野
 // SituationJudge         … 日時から状況と分野を決める
@@ -25,6 +28,7 @@ package com.example.taskboard.service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
@@ -38,6 +42,7 @@ import com.example.taskboard.domain.ProposalCard;
 import com.example.taskboard.domain.ProposalSet;
 import com.example.taskboard.domain.ProposalStatus;
 import com.example.taskboard.domain.Task;
+import com.example.taskboard.domain.User;
 import com.example.taskboard.exception.NotFoundException;
 import com.example.taskboard.logic.Situation;
 import com.example.taskboard.logic.SituationJudge;
@@ -80,6 +85,17 @@ import com.example.taskboard.repository.ProposalSetRepository;
  * 未完了は「まだ手を付けていないもの」なので偏る。
  * そして完了を渡さないと、AI は過去を知らないまま「新しい案」を作ることになり、
  * 前にやったものと同じ内容が「あたらしい」として出てくる。
+ *
+ * 【最初の3択の答えは、AI に渡さない】
+ *
+ * 主な用途・すすめ方・集中時間の3つは、このクラスとロジックだけが読む。
+ * 　主な用途   → 分野の点数（SituationJudge）
+ * 　集中時間   → 2件目の分数（SituationJudge）
+ * 　すすめ方   → 3件目に使うタスクの選び方（pickOne）
+ *
+ * AI には「その結果どの分野を出すか」だけが届く。
+ * 文章でプロフィールを渡すと効きすぎて、タスク一覧を見ずに
+ * そこから中身を作り始めることがあった。
  *
  * 【分野はアプリが決める】
  *
@@ -139,6 +155,7 @@ public class ProposalService {
 
 	/**
 	 * 3つ目に使うタスクを選ぶためのくじ引き。
+	 * すすめ方が未回答のときだけ使う。
 	 *
 	 * 呼ぶたびに new すると、短い間に呼ばれたとき同じ値が続くことがある。
 	 * 1つ作って使い回す。
@@ -224,7 +241,8 @@ public class ProposalService {
 	@Transactional
 	public ProposalSet generateSet(List<ProposalCard> previousCards) {
 
-		Long userId = userService.currentId();
+		// 最初の3択の答えを持っている。未回答なら中身が null
+		User user = userService.current();
 
 		// 前回の1件目の分野。次はここを外す。
 		// 外すのは1つだけ。分野は3つしかないので、2つ外すと選ぶ余地が消える
@@ -237,25 +255,21 @@ public class ProposalService {
 				.toList();
 
 		// 日時を渡すのは、時間帯だけでなく曜日も見るため。
-		//
-		// 2つ目と3つ目は初回の3択の答え（主な用途・集中時間）。
-		// まだ質問画面が無いので null を渡している。
-		// null のときは、分野は時間帯と曜日だけで決まり、2件目は20〜60分になる。
+		// 未回答のときは null が渡り、分野は時間帯と曜日だけで決まる。
 		Situation situation = situationJudge.judge(
-				LocalDateTime.now(), null, null, avoidCategory);
+				LocalDateTime.now(), user.getMainUse(), user.getFocusLevel(), avoidCategory);
 
 		// 3つ目の案にそのまま使うタスクを、手持ちから1件だけ選ぶ。
 		//
 		// 押すたびに新しいタスクが増え続けるのを防ぎ、
 		// 登録したまま止まっているものを掘り起こすため。
 		//
-		// 選び方はくじ引き。締切順などにすると、同じものばかり出て埋もれ直す。
 		// 1件も無ければ null で、そのときは3案とも新しい案になる。
 		//
 		// findActive はログイン中の本人のぶんだけを返すので、
 		// ここに他人のタスクが混ざることはない。AIへ送る材料も本人のものだけになる。
 		List<Task> activeTasks = taskService.findActive();
-		Task pickedTask = pickOne(activeTasks);
+		Task pickedTask = pickOne(activeTasks, user.getOrderPref());
 
 		// 完了したものも材料に入れる。
 		// これが無いと、AI は過去を知らないまま「新しい案」を作ることになり、
@@ -291,7 +305,7 @@ public class ProposalService {
 		// セットを先に保存する。カードが持つ proposalSetId を決めるために、
 		// セットの id が先に必要になるため。
 		ProposalSet set = new ProposalSet();
-		set.setUserId(userId);
+		set.setUserId(user.getId());
 		set.setRequestedAt(LocalDateTime.now());
 		set.setStatus(ProposalStatus.OPEN);
 		set.setSource(source);
@@ -531,23 +545,52 @@ public class ProposalService {
 	}
 
 	/**
-	 * 未完了のタスクから1件、ランダムに選ぶ。
+	 * 3つ目の案に使うタスクを1件選ぶ。
+	 *
+	 * 選び方は最初の3択の答えによる。
+	 * 　EASY … 見積りの短い順（かんたんなものから）
+	 * 　DUE  … 締切の近い順
+	 * 　OLD  … 登録の古い順（残っているものから）
+	 * 未回答のときはくじ引き。
+	 *
+	 * 締切や見積りが入っていないタスクは後ろに回している。
+	 * 未設定を先頭に置くと、書き忘れただけのものが毎回出てしまう。
 	 *
 	 * 1件も無ければ null を返す。
 	 * 呼び出し側は null のときプロンプトの欄ごと出さないので、
 	 * ここで空のリストを返す形にはしていない。
 	 *
-	 * @param tasks 未完了のタスク
+	 * @param tasks     未完了のタスク
+	 * @param orderPref すすめ方の好み。未回答なら null
 	 * @return 選ばれた1件。無ければ null
 	 */
-	private Task pickOne(List<Task> tasks) {
+	private Task pickOne(List<Task> tasks, String orderPref) {
 
 		if (tasks.isEmpty()) {
 			return null;
 		}
 
-		// nextInt(n) は 0 以上 n 未満の整数を返す。
-		// リストの番号は0から始まるので、そのまま添字に使える
-		return tasks.get(random.nextInt(tasks.size()));
+		// switch は null を受け取れないので、空文字に置き換えてから渡す
+		Comparator<Task> order = switch (orderPref == null ? "" : orderPref) {
+
+			case "EASY" -> Comparator.comparing(Task::getEstimatedMinutes,
+					Comparator.nullsLast(Comparator.naturalOrder()));
+
+			case "DUE" -> Comparator.comparing(Task::getDueDate,
+					Comparator.nullsLast(Comparator.naturalOrder()));
+
+			case "OLD" -> Comparator.comparing(Task::getCreatedAt);
+
+			// 未回答。くじ引きにする
+			default -> null;
+		};
+
+		if (order == null) {
+			// nextInt(n) は 0 以上 n 未満の整数を返す。
+			// リストの番号は0から始まるので、そのまま添字に使える
+			return tasks.get(random.nextInt(tasks.size()));
+		}
+
+		return tasks.stream().min(order).orElse(null);
 	}
 }

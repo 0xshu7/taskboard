@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>はじめまして｜さんたく</title>
+
+<link rel="stylesheet" th:href="@{/css/style.css}">
+<link rel="icon" th:href="@{/favicon.ico}" sizes="any">
+</head>
+
+<body>
+
+	<div class="container settings">
+
+		<header class="header">
+			<div th:replace="~{fragments/logo :: appTitle}"></div>
+		</header>
+
+		<p class="profile-lead" th:if="${step == 1}">
+			はじめまして！<br>３つだけ教えて
+		</p>
+
+		<p class="profile-step" th:text="${step} + ' / 3'">1 / 3</p>
+
+		<!--
+			1問目と2問目は、選択肢そのものが送信ボタンになっている。
+			name と value を持つボタンは、押したものだけが送られるので、
+			ラジオボタンと「決定」ボタンの2段階が要らない。
+
+			答えは隠し項目で次の画面へ持ち越す。
+			サーバー側には何も置かないので、途中で離脱しても残らない。
+		-->
+
+		<!-- 1問目 -->
+		<form th:if="${step == 1}" th:action="@{/profile/step2}" method="post">
+			<h2 class="section">このアプリ、おもに何につかう？</h2>
+			<div class="choices">
+				<button class="choice" name="mainUse" value="べんきょう">べんきょう</button>
+				<button class="choice" name="mainUse" value="せいかつ">せいかつ</button>
+				<button class="choice" name="mainUse" value="リラックス">リラックス</button>
+			</div>
+		</form>
+
+		<!-- 2問目 -->
+		<form th:if="${step == 2}" th:action="@{/profile/step3}" method="post">
+			<input type="hidden" name="mainUse" th:value="${mainUse}">
+
+			<h2 class="section">どのすすめ方がすき？</h2>
+			<div class="choices">
+				<button class="choice" name="orderPref" value="EASY">かんたんなものから</button>
+				<button class="choice" name="orderPref" value="DUE">締切が近いものから</button>
+				<button class="choice" name="orderPref" value="OLD">残っているものから</button>
+			</div>
+		</form>
+
+		<!--
+			3問目だけ、選択肢ごとにフォームを分けている。
+
+			ここには class="start-form" が付く。
+			押したあと AI の応答を待つので、待機画面と効果音を出したいため。
+
+			ただし effects.js は start-form を見つけると、
+			いったん送信を止めて、音を鳴らしてから form.submit() で送り直す。
+			このとき、押されたボタンの name と value は送られない。
+			押したという情報が JavaScript を経由した時点で失われるため。
+
+			値を隠し項目に持たせておけば、その影響を受けない。
+			1問目・2問目は start-form が付いていないので、ボタンの value のままでよい。
+		-->
+		<div th:if="${step == 3}">
+
+			<h2 class="section">1回の集中はどれくらい？</h2>
+			<div class="choices">
+
+				<form th:action="@{/profile}" method="post" class="start-form">
+					<input type="hidden" name="mainUse" th:value="${mainUse}">
+					<input type="hidden" name="orderPref" th:value="${orderPref}">
+					<input type="hidden" name="focusLevel" value="SHORT">
+					<button class="choice">15分くらい</button>
+				</form>
+
+				<form th:action="@{/profile}" method="post" class="start-form">
+					<input type="hidden" name="mainUse" th:value="${mainUse}">
+					<input type="hidden" name="orderPref" th:value="${orderPref}">
+					<input type="hidden" name="focusLevel" value="MIDDLE">
+					<button class="choice">1時間くらい</button>
+				</form>
+
+				<form th:action="@{/profile}" method="post" class="start-form">
+					<input type="hidden" name="mainUse" th:value="${mainUse}">
+					<input type="hidden" name="orderPref" th:value="${orderPref}">
+					<input type="hidden" name="focusLevel" value="LONG">
+					<button class="choice">がっつり長時間</button>
+				</form>
+
+			</div>
+		</div>
+
+		<p class="note">あとから設定でやりなおせます。</p>
+
+	</div>
+
+	<script th:src="@{/js/effects.js}"></script>
+
+</body>
+</html>
