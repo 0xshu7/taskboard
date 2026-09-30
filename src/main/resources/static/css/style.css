@@ -1470,3 +1470,25 @@ body {
     transition: none;
   }
 }
+
+.choice { transition: background .15s ease; }
+
+.choices > .choice:nth-child(1):hover,
+.choices > :nth-child(1) .choice:hover { background: #e6f9fb; }
+
+.choices > .choice:nth-child(2):hover,
+.choices > :nth-child(2) .choice:hover { background: #f2fbe6; }
+
+.choices > .choice:nth-child(3):hover,
+.choices > :nth-child(3) .choice:hover { background: #fdeaf3; }
+
+@media (prefers-reduced-motion: reduce) {
+  .message,
+  .detail-toggle,
+  .waiting-dots span,
+  .waiting-face,
+  .choice {
+    animation: none;
+    transition: none;
+  }
+}

@@ -23,7 +23,7 @@ spring:
 
 
 ai:
-  mock: true
+  mock: false
   model: gemini-3.6-flash
   api-key: ${GEMINI_API_KEY:}
   timeout-seconds: 10
