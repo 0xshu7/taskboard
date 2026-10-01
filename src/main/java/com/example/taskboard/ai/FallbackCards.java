@@ -4,20 +4,29 @@ package com.example.taskboard.ai;
 // java.util.ArrayList … リストの実装
 // java.util.List      … リストの型
 //
+// 以下はログの部品。Spring Boot に最初から入っているので、pom.xml に足すものは無い。
+// Logger        … ログを出す道具
+// LoggerFactory … そのクラス用の Logger を作る
+//
 // 以下はこのアプリの部品。
 // Difficulty   … 難易度
 // Granularity  … タスクの粒度
 // ProposalCard … 提案カード1枚
 // Task         … 3件目にそのまま使うタスク
+// Categories   … 分野の名前
 // Situation    … いまの状況と、出す分野。SituationJudge が決めたもの
 
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.example.taskboard.domain.Difficulty;
 import com.example.taskboard.domain.Granularity;
 import com.example.taskboard.domain.ProposalCard;
 import com.example.taskboard.domain.Task;
+import com.example.taskboard.logic.Categories;
 import com.example.taskboard.logic.Situation;
 
 /**
@@ -60,6 +69,17 @@ import com.example.taskboard.logic.Situation;
  * ここに同じ言葉を書き写すと、片方だけ直したときに食い違う。
  * title に時間帯の言葉を書かないこと。前置きが二重になる。
  *
+ * 分野の名前も同じ考えで、Categories が持っているものを使う。
+ * 以前はここと SituationJudge が同じ一覧をそれぞれ書いていた。
+ *
+ * 【想定外の分野が来たとき】
+ *
+ * 分野は3つと決めているが、呼び出し側が変われば4つ目が来ることもありうる。
+ * そのときは normalize でリラックスに寄せ、ログに残す。
+ * ここで例外を投げてはいけない。AI が落ちたときの逃げ道が落ちると、
+ * 「落ちても止まらない」が成り立たなくなる。
+ * 黙って通すと、上の v5.1 と同じことがもう一度起きる。
+ *
  * 【3件目に detail を書かない理由】
  *
  * 拾ってきたタスクの中身を、このクラスは知らない。
@@ -80,15 +100,22 @@ public class FallbackCards {
 
 	// ===== 定数 =====
 
+	/**
+	 * ログを出す道具。
+	 *
+	 * このクラスのメソッドはすべて static なので、こちらも static にする。
+	 * 他のクラスと違い、インスタンスが作られないため。
+	 */
+	private static final Logger log = LoggerFactory.getLogger(FallbackCards.class);
+
 	/** 2件目の分数。保険なので代表値を1つだけ持つ */
 	private static final int LONG_MINUTES = 30;
 
 	/** 3件目に見積もりが無いときの分数 */
 	private static final int DEFAULT_MINUTES = 15;
 
-	/** 分野の一覧。3件目に使う「残りの分野」を求めるために持つ */
-	private static final List<String> CATEGORIES =
-			List.of("べんきょう", "せいかつ", "リラックス");
+	/** 想定外の分野が来たときの寄せ先 */
+	private static final String FALLBACK_CATEGORY = Categories.RELAX;
 
 	// ===== コンストラクタ =====
 
@@ -118,8 +145,8 @@ public class FallbackCards {
 		// モックは時間帯を持たないので、昼として扱う。
 		// 開発中の見た目を確かめるためのものなので、どの時間帯でも用は足りる。
 		String timeOfDay = situation != null ? situation.getTimeOfDay() : "昼";
-		String first = situation != null ? situation.getFirstCategory() : "べんきょう";
-		String second = situation != null ? situation.getSecondCategory() : "せいかつ";
+		String first = situation != null ? situation.getFirstCategory() : Categories.STUDY;
+		String second = situation != null ? situation.getSecondCategory() : Categories.LIFE;
 
 		List<ProposalCard> cards = new ArrayList<>();
 		cards.add(shortCard(timeOfDay, first));
@@ -134,7 +161,35 @@ public class FallbackCards {
 	}
 
 	/**
+	 * 決めた3つの分野に収める。
+	 *
+	 * 一覧に無いものが来たら、リラックスに寄せてログに残す。
+	 * 寄せた値はカードの category にもそのまま入るので、
+	 * 記録に4つ目の分野が混ざることはない。
+	 *
+	 * 寄せたこと自体は起きてほしくないことなので warn で出す。
+	 * 普通に動いているときは1行も出ない。
+	 *
+	 * List.of で作った一覧は contains(null) で例外を投げるため、
+	 * null の判定を先に置いている。
+	 *
+	 * @param category 呼び出し側から渡された分野
+	 * @return 3つのうちのどれか
+	 */
+	private static String normalize(String category) {
+
+		if (category != null && Categories.ALL.contains(category)) {
+			return category;
+		}
+		log.warn("想定外の分野: {} → {} として返す", category, FALLBACK_CATEGORY);
+		return FALLBACK_CATEGORY;
+	}
+
+	/**
 	 * 1件目。3〜10分で、今日はもう動けないと思っている人でも手が出るもの。
+	 *
+	 * 分野は normalize を通してから使う。
+	 * そのため default に来るのはリラックスだけになる。
 	 *
 	 * @param timeOfDay 朝・昼・夜・深夜
 	 * @param category  出す分野
@@ -142,19 +197,20 @@ public class FallbackCards {
 	 */
 	private static ProposalCard shortCard(String timeOfDay, String category) {
 
-		String words = PromptBuilder.wordsFor(timeOfDay, category);
+		String target = normalize(category);
+		String words = PromptBuilder.wordsFor(timeOfDay, target);
 
-		return switch (category) {
-			case "べんきょう" -> card(
-					words + "サクッと1問クリア！", category,
+		return switch (target) {
+			case Categories.STUDY -> card(
+					words + "サクッと1問クリア！", target,
 					Granularity.FIVE_MIN, Difficulty.LOW, 5,
 					"1問解くだけで、脳のやる気スイッチON！",
 					"✓一番解けそうな1問をロックオン！\n"
 							+ "✓集中して一気にアタック\n"
 							+ "✓花マルをつけて「できた！」を実感\n"
 							+ "おわりの目安: 1問解けたらクエスト達成！");
-			case "せいかつ" -> card(
-					words + "すきな1杯でごほうびタイム", category,
+			case Categories.LIFE -> card(
+					words + "すきな1杯でごほうびタイム", target,
 					Granularity.FIVE_MIN, Difficulty.LOW, 5,
 					"1杯味わうだけで、気分スッキリリセット！",
 					"✓とっておきの飲みものを用意する\n"
@@ -162,7 +218,7 @@ public class FallbackCards {
 							+ "✓ボーッと外を眺めて頭をからっぽに\n"
 							+ "おわりの目安: 飲み終わったらチャージ完了！");
 			default -> card(
-					words + "深呼吸10回でパワーチャージ！", category,
+					words + "深呼吸10回でパワーチャージ！", target,
 					Granularity.FIVE_MIN, Difficulty.LOW, 5,
 					"息を吐ききるたび、体が軽～くなる！",
 					"✓いすに深く座って、背筋をピン！\n"
@@ -176,6 +232,7 @@ public class FallbackCards {
 	 * 2件目。ちょっとの時間をつくればできること。
 	 *
 	 * 3行の役割と、おわりの目安の置き方は shortCard と同じ。
+	 * 分野の扱いも shortCard と同じ。
 	 *
 	 * @param timeOfDay 朝・昼・夜・深夜
 	 * @param category  出す分野
@@ -183,19 +240,20 @@ public class FallbackCards {
 	 */
 	private static ProposalCard longCard(String timeOfDay, String category) {
 
-		String words = PromptBuilder.wordsFor(timeOfDay, category);
+		String target = normalize(category);
+		String words = PromptBuilder.wordsFor(timeOfDay, target);
 
-		return switch (category) {
-			case "べんきょう" -> card(
-					words + "今日のゴールまで一気に駆け抜ける！", category,
+		return switch (target) {
+			case Categories.STUDY -> card(
+					words + "今日のゴールまで一気に駆け抜ける！", target,
 					Granularity.TODAY, Difficulty.MID, LONG_MINUTES,
 					"ゴールを決めれば、あとは走るだけ！",
 					"✓今日のウイニングゾーン（範囲）を決定！\n"
 							+ "✓タイマーをセットしてノリノリで進める\n"
 							+ "✓迷った所は「レベルアップの宝（印）」にする\n"
 							+ "おわりの目安: 決めた範囲が終わったらゴールイン！");
-			case "せいかつ" -> card(
-					words + "1か所ピカピカ大作戦！", category,
+			case Categories.LIFE -> card(
+					words + "1か所ピカピカ大作戦！", target,
 					Granularity.TODAY, Difficulty.MID, LONG_MINUTES,
 					"1か所キレイにするだけで、空間も気分も大変身！",
 					"✓「ここだけキレイにする！」とターゲットロック\n"
@@ -203,7 +261,7 @@ public class FallbackCards {
 							+ "✓いらないものを手放して視界スッキリ\n"
 							+ "おわりの目安: 1か所ピカッとしたら完全攻略！");
 			default -> card(
-					words + "気ままに冒険おさんぽタイム", category,
+					words + "気ままに冒険おさんぽタイム", target,
 					Granularity.TODAY, Difficulty.LOW, LONG_MINUTES,
 					"外の空気を吸うだけで、アイデアがひらめく！",
 					"✓お気に入りの靴をはいて出発！\n"
@@ -238,7 +296,7 @@ public class FallbackCards {
 				? task.getDifficulty()
 				: Difficulty.MID;
 
-		return card(task.getTitle(), category,
+		return card(task.getTitle(), normalize(category),
 				Granularity.TODAY, difficulty, minutes,
 				"リストに残っているので、ここで片づけておくと軽くなります",
 				null);
@@ -256,12 +314,12 @@ public class FallbackCards {
 	 */
 	private static String rest(String first, String second) {
 
-		for (String category : CATEGORIES) {
+		for (String category : Categories.ALL) {
 			if (!category.equals(first) && !category.equals(second)) {
 				return category;
 			}
 		}
-		return CATEGORIES.get(0);
+		return Categories.ALL.get(0);
 	}
 
 	/**

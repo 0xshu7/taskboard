@@ -7,8 +7,9 @@ package com.example.taskboard.controller;
 // GetMapping … そのURLを開いたときに動くメソッドの印
 //
 // 以下はこのアプリの部品。
-// TaskService … タスクの処理。残り件数を出すために使う
-// UserService … 利用者と設定。効果音の音量を画面へ渡すために使う
+// SettingsForm … 画面へ渡す設定の入れ物
+// TaskService  … タスクの処理。残り件数を出すために使う
+// UserService  … 利用者と設定。効果音と紙ふぶきの入切を画面へ渡すために使う
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -39,7 +40,7 @@ public class HomeController {
 	/** タスクの処理。残り件数を出すために使う */
 	private final TaskService taskService;
 
-	/** 利用者と設定。効果音の音量を画面へ渡すために使う */
+	/** 利用者と設定。効果音と紙ふぶきの入切を画面へ渡すために使う */
 	private final UserService userService;
 
 	// ===== コンストラクタ =====
@@ -82,7 +83,7 @@ public class HomeController {
 
 		model.addAttribute("remaining", taskService.countRemaining());
 
-		// 効果音の音量。画面の body に渡し、JavaScript がそこから読む
+		// 効果音と紙ふぶきの入切。画面の body に渡し、JavaScript がそこから読む。
 		// 設定は入れ物ごと渡す。項目が増えても、この行は変わらない
 		model.addAttribute("settings", SettingsForm.from(userService.current()));
 

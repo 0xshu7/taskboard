@@ -7,7 +7,9 @@ package com.example.taskboard.logic;
 // java.util.HashMap       … 分野ごとの点数を入れる
 // java.util.List          … リストの型
 // java.util.Map           … 「分野 → 点数」の組
-// java.util.Random        … 同じ組み合わせが続かないようにする
+//
+// java.util.concurrent.ThreadLocalRandom
+//   … くじ引き。スレッドごとに別のものが用意されるので、取り合いが起きない
 //
 // 以下は Spring の部品。
 // Component … Spring に管理させるクラスです、という印
@@ -18,7 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.stereotype.Component;
 
@@ -41,6 +43,9 @@ import org.springframework.stereotype.Component;
  *
  * 分野を先に決めてしまえば、「3案は違う話題に」と頼む必要がなくなる。
  * 1位と2位を使うので、必ず違う分野になる。
+ *
+ * 分野の名前は Categories が持っている。
+ * ここと FallbackCards に同じ一覧を書いていたので、1か所にまとめた。
  *
  * 【点数の付け方】
  *
@@ -109,10 +114,6 @@ public class SituationJudge {
 
 	// ===== フィールド =====
 
-	/** 分野は3つ。提案カードの category にもこの言葉を使う */
-	private static final List<String> CATEGORIES =
-			List.of("べんきょう", "せいかつ", "リラックス");
-
 	/** ゆらぎの幅。僅差のときだけ順位が入れ替わる大きさにしてある */
 	private static final double JITTER = 0.4;
 
@@ -124,12 +125,6 @@ public class SituationJudge {
 	 * 3分野とも記録が無ければ全部これになるので、差は出ない。
 	 */
 	private static final double NO_RECORD = 1.0 / 3.0;
-
-	/**
-	 * ゆらぎ用のくじ引き。
-	 * 呼ぶたびに new すると、短い間に呼ばれたとき同じ値が続くことがある。
-	 */
-	private final Random random = new Random();
 
 	// ===== メソッド =====
 
@@ -231,7 +226,7 @@ public class SituationJudge {
 		Map<String, Double> score = new HashMap<>();
 
 		// 基本は横並び
-		for (String category : CATEGORIES) {
+		for (String category : Categories.ALL) {
 			score.put(category, 1.0);
 		}
 
@@ -243,39 +238,46 @@ public class SituationJudge {
 		// 時間帯。深夜のべんきょうは下げて、出にくくする
 		switch (timeOfDay) {
 			case "朝" -> {
-				score.merge("せいかつ", 1.0, Double::sum);
-				score.merge("リラックス", 0.5, Double::sum);
+				score.merge(Categories.LIFE, 1.0, Double::sum);
+				score.merge(Categories.RELAX, 0.5, Double::sum);
 			}
-			case "昼" -> score.merge("べんきょう", 1.0, Double::sum);
+			case "昼" -> score.merge(Categories.STUDY, 1.0, Double::sum);
 			case "夜" -> {
-				score.merge("リラックス", 1.0, Double::sum);
-				score.merge("べんきょう", 0.5, Double::sum);
+				score.merge(Categories.RELAX, 1.0, Double::sum);
+				score.merge(Categories.STUDY, 0.5, Double::sum);
 			}
 			default -> {
-				score.merge("リラックス", 1.5, Double::sum);
-				score.merge("べんきょう", -1.0, Double::sum);
+				score.merge(Categories.RELAX, 1.5, Double::sum);
+				score.merge(Categories.STUDY, -1.0, Double::sum);
 			}
 		}
 
 		// 土日。平日と同じ並びにならないようにする
 		if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
-			score.merge("リラックス", 1.0, Double::sum);
+			score.merge(Categories.RELAX, 1.0, Double::sum);
 		}
 
 		// 完了率。終わらせている分野を出やすくする。
 		// 記録が無い分野は 0.33 で並ぶので、使い始めは差にならない。
 		// 最大でも 1.0 なので、時間帯の重みを覆さない
-		for (String category : CATEGORIES) {
+		for (String category : Categories.ALL) {
 			score.merge(category, bonus.getOrDefault(category, NO_RECORD), Double::sum);
 		}
 
 		// ゆらぎ。僅差のときだけ入れ替わる。
-		// 完了率の低い分野も点数が 0 にならないので、見捨てられずに時々出る
-		for (String category : CATEGORIES) {
-			score.merge(category, random.nextDouble() * JITTER, Double::sum);
+		// 完了率の低い分野も点数が 0 にならないので、見捨てられずに時々出る。
+		//
+		// ThreadLocalRandom.current() は、いま動いているスレッド用のくじ引きを返す。
+		// new しているわけではなく、スレッドごとに用意されたものを取り出すだけ。
+		//
+		// このクラスは1つだけ作られて使い回されるので（@Component の既定）、
+		// Random を1つ持つと、同時に使う人数ぶんの取り合いになる。
+		// スレッドごとに分かれていれば、その取り合いが起きない
+		for (String category : Categories.ALL) {
+			score.merge(category, ThreadLocalRandom.current().nextDouble() * JITTER, Double::sum);
 		}
 
-		List<String> ranked = new ArrayList<>(CATEGORIES);
+		List<String> ranked = new ArrayList<>(Categories.ALL);
 
 		// 点数の高い順。b と a の順に比べると降順になる
 		ranked.sort((a, b) -> Double.compare(score.get(b), score.get(a)));
@@ -303,6 +305,10 @@ public class SituationJudge {
 	 * 集中時間の答えから、2件目の目安時間を決める。
 	 *
 	 * 未回答のときは真ん中にしておく。
+	 *
+	 * 文字列をそのまま書いているのは、この値を読むのがここだけのため。
+	 * 分野の名前（Categories）は3つのクラスに散っていたのでまとめたが、
+	 * こちらは1か所しかないので、定数にしても探す手間は減らない。
 	 *
 	 * @param focusLevel SHORT / MIDDLE / LONG。未回答なら null
 	 * @return 「20〜60分」のような文字列

@@ -386,8 +386,11 @@ public class ProposalCard {
 	/**
 	 * 文字数の上限を超えていたら切り詰める。
 	 *
+	 * 絵文字を割らないように、文字の数で数えて切っている。
+	 * 理由は Task.truncate の説明を見ること。
+	 *
 	 * Task にも同じものがある。共通のクラスに出すこともできるが、
-	 * 7行のために参照されるクラスを1つ増やすと、
+	 * 数行のために参照されるクラスを1つ増やすと、
 	 * パッケージの構成に手が入る。3か所目が出たときに考える。
 	 *
 	 * @param text 元の文字
@@ -396,9 +399,11 @@ public class ProposalCard {
 	 */
 	private static String truncate(String text, int max) {
 
-		if (text != null && text.length() > max) {
-			return text.substring(0, max);
+		if (text == null || text.codePointCount(0, text.length()) <= max) {
+			return text;
 		}
-		return text;
+
+		// max 文字ぶん進んだ位置を求めてから切る
+		return text.substring(0, text.offsetByCodePoints(0, max));
 	}
 }

@@ -25,6 +25,10 @@ import com.example.taskboard.domain.PushSubscription;
  *
  * 条件に書く項目名は、PushSubscription のフィールド名と一致させる。
  * 列名（user_id）ではなくフィールド名（userId）で書く。
+ *
+ * 呼ぶのは PushSubscriptionService だけにしてある。
+ * 以前は controller から直接呼んでいる箇所が2つあったが、
+ * 「controller は service だけを呼ぶ」という形に合わせて寄せた。
  */
 public interface PushSubscriptionRepository extends JpaRepository<PushSubscription, Long> {
 
@@ -37,9 +41,26 @@ public interface PushSubscriptionRepository extends JpaRepository<PushSubscripti
 	 * 送るときは、この全部に送る。
 	 *
 	 * @param userId 利用者のID
-	 * @return 届け先の一覧
+	 * @return 届け先の一覧。1件も無ければ空のリスト
 	 */
 	List<PushSubscription> findByUserId(Long userId);
+
+	/**
+	 * この利用者の届け先が1件でもあるかを返す。
+	 *
+	 * SELECT COUNT(*) > 0 FROM push_subscriptions WHERE user_id = ?
+	 *
+	 * 設定画面のスイッチを入で表示するかどうかの判定に使う。
+	 * 通知の入切を表す列は作っていないので、行の有無がそのまま入切を表す。
+	 *
+	 * findByUserId で取ってきて件数を見ることもできるが、
+	 * それだと端末の数だけ行を読み込むことになる。
+	 * 知りたいのは「あるか無いか」だけなので、こちらで足りる。
+	 *
+	 * @param userId 利用者のID
+	 * @return 1件でもあれば true
+	 */
+	boolean existsByUserId(Long userId);
 
 	/**
 	 * 届け先のURLで1件探す。
@@ -59,8 +80,12 @@ public interface PushSubscriptionRepository extends JpaRepository<PushSubscripti
 	 *
 	 * DELETE FROM push_subscriptions WHERE endpoint = ?
 	 *
-	 * 通知を切ったときや、送って「もう無効です」と返ってきたときに使う。
+	 * 送ってみて「もう無効です」（404 / 410）と返ってきたときに使う。
 	 * 消さずに残すと、毎回失敗する送信を繰り返すことになる。
+	 *
+	 * こちらは所有者を見ない。
+	 * 本人の操作ではなく、相手のサービスが「もう無い」と答えた届け先なので、
+	 * 誰のものであっても残す理由がない。
 	 *
 	 * deleteBy... で始まるメソッドは、呼ぶ側に @Transactional が要る。
 	 * 付けずに呼ぶと、起動はするが実行時に失敗する。
@@ -71,17 +96,25 @@ public interface PushSubscriptionRepository extends JpaRepository<PushSubscripti
 	 * @return 消した件数
 	 */
 	long deleteByEndpoint(String endpoint);
-	
+
 	/**
-	 * この利用者の届け先が1件でもあるかを返す。
+	 * 自分の届け先だけを、URLで削除する。
 	 *
-	 * 設定画面のスライドを入で表示するかどうかの判定に使う。
+	 * DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?
 	 *
-	 * findByUserId で取ってきて件数を見ることもできるが、
-	 * それだと端末の数だけ行を読み込むことになる。
-	 * 知りたいのは「あるか無いか」だけなので、こちらで足りる。
+	 * 画面から通知を切ったときに使う。
+	 * endpoint だけを見て消すこともできるが、それだと
+	 * 他人の endpoint を知っている人が、その通知を切れてしまう。
+	 *
+	 * 推測できる長さの文字列ではないので危険は低い。
+	 * ただ「自分のものだけ操作できる」という線を、
+	 * タスクと同じようにここでも引いておく。
+	 *
+	 * こちらも呼ぶ側に @Transactional が要る。
+	 *
+	 * @param endpoint 届け先のURL
+	 * @param userId   利用者のID
+	 * @return 消した件数。他人のものを指していれば0
 	 */
-	boolean existsByUserId(Long userId);
-	
 	long deleteByEndpointAndUserId(String endpoint, Long userId);
 }

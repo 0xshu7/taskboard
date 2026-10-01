@@ -9,6 +9,10 @@
  * /js/sw.js のように下に置くと、そこから下しか担当できなくなる。
  */
 
+// アプリの名前。中身が読めなかったときの見出しに使う。
+// 画面に出る文字なので、名前を変えたらここも変える
+const APP_NAME = "さんたく";
+
 // ===== 通知を受け取る =====
 
 /**
@@ -20,13 +24,14 @@
 self.addEventListener("push", function (event) {
 
 	// 中身が無いこともある。そのときは既定の文言にする
-	let payload = { title: "Task Board", body: "" };
+	let payload = { title: APP_NAME, body: "" };
 
 	if (event.data) {
 		try {
 			payload = event.data.json();
 		} catch (e) {
-			// JSON として読めない場合は、そのまま文字として扱う
+			// JSON として読めない場合は、そのまま文字として扱う。
+			// 見出しは既定のままにして、本文に中身を入れる
 			payload.body = event.data.text();
 		}
 	}

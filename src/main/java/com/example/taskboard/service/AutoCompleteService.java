@@ -1,30 +1,28 @@
 package com.example.taskboard.service;
 
 // ===== インポート =====
-// java.time.LocalDateTime … 日付＋時刻。予定時刻の比較に使う
-// java.util.List          … リストの型
+// java.util.List … リストの型
+//
+// 以下はログの部品。Spring Boot に最初から入っているので、pom.xml に足すものは無い。
+// Logger        … ログを出す道具
+// LoggerFactory … そのクラス用の Logger を作る
 //
 // 以下は Spring の部品。
-// Scheduled     … 決まった間隔でメソッドを自動で動かす
-// Service       … 処理のまとまりです、という印
-// Transactional … メソッドの途中で失敗したら、その中の保存をすべて取り消す
+// Scheduled … 決まった間隔でメソッドを自動で動かす
+// Service   … 処理のまとまりです、という印
 //
 // 以下はこのアプリの部品。
 // Task           … タスク1件
-// TaskStatus     … タスクの状態
-// TaskRepository … タスクの出し入れ
 // UserRepository … 利用者の出し入れ
 
-import java.time.LocalDateTime;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.example.taskboard.domain.Task;
-import com.example.taskboard.domain.TaskStatus;
-import com.example.taskboard.repository.TaskRepository;
 import com.example.taskboard.repository.UserRepository;
 
 /**
@@ -35,20 +33,48 @@ import com.example.taskboard.repository.UserRepository;
  * こちらで持てば、押してアプリを閉じて、実際に手を動かしている間に完了し、
  * 通知だけが届く、という流れになる。
  *
- * 完了させるのは status が進行中で、予定時刻を過ぎたものだけ。
- * 予約していないタスクの autoCompleteAt は null なので、検索に引っかからない。
- *
  * この仕組みを入れた理由は、完了ボタンの押し忘れを減らすこと。
  * 始めるときに1回、終わったときにもう1回押す必要があると、2回目を忘れる。
  * 「やっちゃう」は、始めると同時に終わりを予約する。
+ *
+ * 【このクラスは2つを順に呼ぶだけ】
+ *
+ * 1. TaskService.completeDue() … データベースを書き換える。短く終わる
+ * 2. NotificationService.send() … 外部へ送る。相手の応答を待つ
+ *
+ * 1 のほうにだけ @Transactional が付いている。
+ * まとめて1つのメソッドに入れて @Transactional を付けると、
+ * 通知を送っているあいだずっとデータベースの接続を握ったままになる。
+ * 完了したタスクの数だけ繰り返すので、待ち時間が積み上がる。
+ *
+ * かといって、このクラスの中で切り出しても意味がない。
+ * **同じクラスの中から自分のメソッドを呼ぶと @Transactional は効かない。**
+ * Spring は外から呼ばれたときだけ横取りできるため。@Async が効かなかったのと同じ理由。
+ *
+ * そこで、データベース側の処理は TaskService に置いてある。
+ * 別のクラスなので、呼べばきちんと効く。
+ *
+ * 完了したあとに通知が失敗しても、完了は取り消されない。
+ * 終わったことのほうが事実で、知らせられなかったのは別の話だから。
  */
 @Service
 public class AutoCompleteService {
 
 	// ===== フィールド =====
 
-	/** タスクの出し入れ */
-	private final TaskRepository taskRepository;
+	/**
+	 * ログを出す道具。
+	 *
+	 * 以前は System.out.println を使い、目印に「###」を付けて探していた。
+	 * ロガーはクラス名を自動で付けるので、目印は要らない。
+	 *
+	 * 10秒ごとに動くクラスなので、普段は静かにしておきたい。
+	 * 出すのは実際に完了したときだけで、対象が無ければ1行も出ない。
+	 */
+	private static final Logger log = LoggerFactory.getLogger(AutoCompleteService.class);
+
+	/** タスクの処理。時間が来たタスクを完了にしてもらう */
+	private final TaskService taskService;
 
 	/** 利用者の出し入れ。通知の送り先を引くのに使う */
 	private final UserRepository userRepository;
@@ -62,11 +88,11 @@ public class AutoCompleteService {
 	 * 必要な部品を受け取る。
 	 * コンストラクタが1つだけなら、Spring が自動で値を渡す。
 	 */
-	public AutoCompleteService(TaskRepository taskRepository,
+	public AutoCompleteService(TaskService taskService,
 			UserRepository userRepository,
 			NotificationService notificationService) {
 
-		this.taskRepository = taskRepository;
+		this.taskService = taskService;
 		this.userRepository = userRepository;
 		this.notificationService = notificationService;
 	}
@@ -74,7 +100,7 @@ public class AutoCompleteService {
 	// ===== メソッド =====
 
 	/**
-	 * 時間が来たタスクを完了にする。
+	 * 時間が来たタスクを完了にして、知らせる。
 	 *
 	 * fixedDelay は「前回が終わってから次までの間隔」。
 	 * fixedRate（開始から開始まで）と違い、処理が長引いても重ならない。
@@ -87,23 +113,16 @@ public class AutoCompleteService {
 	 * だから「いまの利用者」ではなく、タスクが持つ userId から引く。
 	 */
 	@Scheduled(fixedDelay = 10000)
-	@Transactional
 	public void completeDueTasks() {
 
-		List<Task> tasks = taskRepository
-				.findByStatusAndAutoCompleteAtLessThanEqual(TaskStatus.DOING, LocalDateTime.now());
+		// ここでデータベースの書き換えが終わる。接続はこの1行のあいだだけ握る
+		List<Task> completed = taskService.completeDue();
 
-		for (Task task : tasks) {
+		for (Task task : completed) {
 
-			task.setStatus(TaskStatus.DONE);
-			task.setAutoCompleteAt(null);
-
-			// 予約を消す。残しておくと、もう一度完了にしようとし続ける
-			task.setAutoCompleteAt(null);
-
-			taskRepository.save(task);
-
-			System.out.println("### おまかせ完了: " + task.getTitle());
+			// {} のところに、後ろの値が入る。
+			// 文字を + でつなぐと、ログを出さない設定のときも先につなぐ手間がかかる
+			log.info("おまかせ完了: {}", task.getTitle());
 
 			// 通知する。届け先を登録していない人には、何も起きない
 			userRepository.findById(task.getUserId()).ifPresent(user ->

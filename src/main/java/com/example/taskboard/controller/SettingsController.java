@@ -11,10 +11,10 @@ package com.example.taskboard.controller;
 // ResponseBody   … 返した値を、テンプレート名ではなくそのまま応答として返す
 //
 // 以下はこのアプリの部品。
-// User                       … 利用者1人
-// SettingsForm               … 設定画面から届く入れ物
-// PushSubscriptionRepository … 通知の届け先の出し入れ
-// UserService                … 利用者と設定
+// User                    … 利用者1人
+// SettingsForm            … 設定画面から届く入れ物
+// PushSubscriptionService … 通知の届け先の出し入れ
+// UserService             … 利用者と設定
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.example.taskboard.domain.User;
 import com.example.taskboard.dto.SettingsForm;
-import com.example.taskboard.repository.PushSubscriptionRepository;
+import com.example.taskboard.service.PushSubscriptionService;
 import com.example.taskboard.service.UserService;
 
 /**
@@ -49,6 +49,10 @@ import com.example.taskboard.service.UserService;
  * 保存のURLは、以前は /settings/volume だった。
  * 音量だけを保存していたころの名前で、設定が増えた時点で実態と合わなくなった。
  * 「この画面の設定を保存する」口なので /settings に変えてある。
+ *
+ * 届け先は PushSubscriptionService を通して見る。
+ * 以前はここが repository を直接呼んでいたが、
+ * 「controller は service だけを呼ぶ」という形から外れていた。
  */
 @Controller
 public class SettingsController {
@@ -59,7 +63,7 @@ public class SettingsController {
 	private final UserService userService;
 
 	/** 通知の届け先。スイッチの初期状態を決めるために使う */
-	private final PushSubscriptionRepository subscriptionRepository;
+	private final PushSubscriptionService pushSubscriptionService;
 
 	/**
 	 * VAPIDの公開鍵。通知の許可をもらうときに、ブラウザへ渡す必要がある。
@@ -81,10 +85,10 @@ public class SettingsController {
 	 * コンストラクタが1つだけなら、Spring が自動で値を渡す。
 	 */
 	public SettingsController(UserService userService,
-			PushSubscriptionRepository subscriptionRepository) {
+			PushSubscriptionService pushSubscriptionService) {
 
 		this.userService = userService;
-		this.subscriptionRepository = subscriptionRepository;
+		this.pushSubscriptionService = pushSubscriptionService;
 	}
 
 	// ===== メソッド =====
@@ -93,7 +97,7 @@ public class SettingsController {
 	 * 設定画面を出す。
 	 *
 	 * 画面へ渡すのは3つ。
-	 *   settings    … 効果音と紙ふぶきの設定。まるごと1つの入れ物で渡す
+	 *   settings    … 効果音と紙ふぶきの入切。まるごと1つの入れ物で渡す
 	 *   vapidKey    … 通知の公開鍵。push.js が body から読む
 	 *   pushEnabled … 通知のスイッチを入にして表示するかどうか
 	 *
@@ -105,11 +109,6 @@ public class SettingsController {
 	 * 入切を別の列に持たず、届け先の有無そのものを状態として使っている。
 	 * 同じことを2か所に持つと、必ずどこかで食い違うため。
 	 *
-	 * existsByUserId を使っている。
-	 * findByUserId で取ってきて件数を見ることもできるが、
-	 * それだと端末の数だけ行を読み込むことになる。
-	 * 知りたいのは「あるか無いか」だけなので、こちらで足りる。
-	 *
 	 * @param model 画面へ値を渡す入れ物
 	 * @return templates/settings.html
 	 */
@@ -120,7 +119,7 @@ public class SettingsController {
 
 		model.addAttribute("settings", SettingsForm.from(user));
 		model.addAttribute("vapidKey", vapidPublicKey);
-		model.addAttribute("pushEnabled", subscriptionRepository.existsByUserId(user.getId()));
+		model.addAttribute("pushEnabled", pushSubscriptionService.existsFor(user.getId()));
 
 		return "settings";
 	}

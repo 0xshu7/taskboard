@@ -25,10 +25,13 @@ import com.example.taskboard.repository.TaskRepository;
  * 1. 取り出す（findActive / findDone / countRemaining / findById）
  * 2. 作る・変える・消す（create / update / nextStatus / reorder / delete）
  * 3. カードからタスクを作る（createFromCard / startExisting）
- * 4. 自動完了の予約（startAuto / cancelAuto）
+ * 4. 自動完了（startAuto / cancelAuto / completeDue）
  *
  * 扱うのは、いまログインしている人のタスクだけ。
  * 誰かは UserService に聞き、このクラスはログインの仕組みを知らない。
+ *
+ * 例外は completeDue で、こちらは時計から呼ばれるためログインしている人がいない。
+ * 利用者で絞らず、予定時刻を過ぎたものを全員ぶん取る。
  *
  * 1件を取り出すときは、必ず findById を通す。
  * 他人のタスクかどうかの確認をそこに1か所だけ置いてあるので、
@@ -48,6 +51,9 @@ public class TaskService {
 
 	/** 分数が入っていないタスクの既定値。手で追加したタスクに使う */
 	private static final int DEFAULT_MINUTES = 5;
+
+	/** 自動完了までの最短の秒数。これより短くはしない */
+	private static final int MIN_AUTO_SECONDS = 5;
 
 	/** タスクの出し入れ */
 	private final TaskRepository taskRepository;
@@ -346,7 +352,7 @@ public class TaskService {
 		taskRepository.save(task);
 	}
 
-	// ===== メソッド（自動完了の予約） =====
+	// ===== メソッド（自動完了） =====
 
 	/**
 	 * 「やっちゃう」を押したとき。自動完了を予約する。
@@ -368,9 +374,13 @@ public class TaskService {
 				? DEFAULT_MINUTES
 				: task.getEstimatedMinutes();
 
+		// 割る数が 0 だと、割り算そのものが例外で落ちる。
+		// 設定ファイルから読む値なので、書き間違いが入りうる
+		int divisor = Math.max(autoCompleteDivisor, 1);
+
 		// 割った結果が0にならないようにする。
 		// 0秒後だと、押した瞬間に完了してしまい、何が起きたか分からない
-		long seconds = Math.max(minutes * 60L / autoCompleteDivisor, 5);
+		long seconds = Math.max(minutes * 60L / divisor, MIN_AUTO_SECONDS);
 
 		task.setStatus(TaskStatus.DOING);
 		task.setAutoCompleteAt(LocalDateTime.now().plusSeconds(seconds));
@@ -393,6 +403,42 @@ public class TaskService {
 
 		task.setAutoCompleteAt(null);
 		taskRepository.save(task);
+	}
+
+	/**
+	 * 予定時刻を過ぎたタスクを完了にする。AutoCompleteService から10秒ごとに呼ばれる。
+	 *
+	 * 完了させるのは status が進行中で、予定時刻を過ぎたものだけ。
+	 * 予約していないタスクの autoCompleteAt は null なので、検索に引っかからない。
+	 *
+	 * ログインしている人がいないので、利用者では絞らない。
+	 * ここだけ findById を通らないが、IDを外から受け取っていないので、
+	 * 誰かが他人のタスクを指定する余地がない。
+	 *
+	 * 予約を消しているのは、完了を取り消して進行中に戻したときに、
+	 * 過ぎた予約が生き返って、すぐまた完了にされてしまうのを防ぐため。
+	 *
+	 * 通知はここでは送らない。
+	 * 外部への通信を、データベースを書き換えている区間に入れないため。
+	 * 完了したタスクを返すので、知らせるのは呼び出し側の仕事になる。
+	 *
+	 * @return 完了にしたタスク。1件も無ければ空のリスト
+	 */
+	@Transactional
+	public List<Task> completeDue() {
+
+		List<Task> tasks = taskRepository
+				.findByStatusAndAutoCompleteAtLessThanEqual(TaskStatus.DOING, LocalDateTime.now());
+
+		for (Task task : tasks) {
+
+			task.setStatus(TaskStatus.DONE);
+			task.setAutoCompleteAt(null);
+
+			taskRepository.save(task);
+		}
+
+		return tasks;
 	}
 
 	// ===== メソッド（内部で使うもの） =====

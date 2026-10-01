@@ -124,51 +124,9 @@
 	  <button type="button" class="btn-icon btn-edit" title="編集"
 	          th:attr="data-target='edit-' + ${task.id}">✒️</button>
 
-	  <!-- 編集ダイアログ。押すまでは表示されない -->
-	  <dialog th:id="'edit-' + ${task.id}" class="edit-dialog">
-	    <div class="edit-page">
-
-	      <h2 class="edit-heading">タスクを編集</h2>
-
-	      <form th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
-
-	        <div class="field">
-	          <!-- id は画面の中で1つだけにする必要があるので、タスクIDを付けて区別する -->
-	          <label th:for="'title-' + ${task.id}">タイトル</label>
-	          <input type="text" th:id="'title-' + ${task.id}" name="title"
-	                 th:value="${task.title}" maxlength="100" required autocomplete="off">
-	        </div>
-
-	        <div class="field">
-	          <label th:for="'difficulty-' + ${task.id}">難易度</label>
-	          <select th:id="'difficulty-' + ${task.id}" name="difficulty">
-	            <option th:each="d : ${difficulties}"
-	                    th:value="${d}" th:text="${d.label}"
-	                    th:selected="${d == task.difficulty}">中</option>
-	          </select>
-	        </div>
-
-	        <div class="field">
-	          <label th:for="'due-' + ${task.id}">締切</label>
-	          <input type="date" th:id="'due-' + ${task.id}" name="dueDate"
-	                 th:value="${task.dueDate}">
-	        </div>
-
-	        <div class="field">
-	          <label th:for="'detail-text-' + ${task.id}">完了のヒント</label>
-	          <textarea th:id="'detail-text-' + ${task.id}" name="detail"
-	                    rows="5" th:text="${task.detail}"></textarea>
-	        </div>
-
-	        <div class="edit-actions">
-	          <button type="button" class="btn-cancel"
-	                  onclick="this.closest('dialog').close()">キャンセル</button>
-	          <button type="submit" class="btn-add">保存する</button>
-	        </div>
-	      </form>
-
-	    </div>
-	  </dialog>
+	  <!-- 編集ダイアログ。押すまでは表示されない。
+	       完了側とまったく同じものなので、部品にして1か所にまとめてある -->
+	  <div th:replace="~{fragments/task-edit :: editDialog(${task}, ${difficulties})}"></div>
 
 	  <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
 	    <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>
@@ -242,50 +200,8 @@
 		  <button type="button" class="btn-icon btn-edit" title="編集"
 		          th:attr="data-target='edit-' + ${task.id}">✒️</button>
 
-		  <!-- 編集ダイアログ。押すまでは表示されない -->
-		  <dialog th:id="'edit-' + ${task.id}" class="edit-dialog">
-		    <div class="edit-page">
-
-		      <h2 class="edit-heading">タスクを編集</h2>
-
-		      <form th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
-
-		        <div class="field">
-		          <label th:for="'title-' + ${task.id}">タイトル</label>
-		          <input type="text" th:id="'title-' + ${task.id}" name="title"
-		                 th:value="${task.title}" maxlength="100" required autocomplete="off">
-		        </div>
-
-		        <div class="field">
-		          <label th:for="'difficulty-' + ${task.id}">難易度</label>
-		          <select th:id="'difficulty-' + ${task.id}" name="difficulty">
-		            <option th:each="d : ${difficulties}"
-		                    th:value="${d}" th:text="${d.label}"
-		                    th:selected="${d == task.difficulty}">中</option>
-		          </select>
-		        </div>
-
-		        <div class="field">
-		          <label th:for="'due-' + ${task.id}">締切</label>
-		          <input type="date" th:id="'due-' + ${task.id}" name="dueDate"
-		                 th:value="${task.dueDate}">
-		        </div>
-
-		        <div class="field">
-		          <label th:for="'detail-text-' + ${task.id}">完了のヒント</label>
-		          <textarea th:id="'detail-text-' + ${task.id}" name="detail"
-		                    rows="5" th:text="${task.detail}"></textarea>
-		        </div>
-
-		        <div class="edit-actions">
-		          <button type="button" class="btn-cancel"
-		                  onclick="this.closest('dialog').close()">キャンセル</button>
-		          <button type="submit" class="btn-add">保存する</button>
-		        </div>
-		      </form>
-
-		    </div>
-		  </dialog>
+		  <!-- 未完了側と同じ部品を呼ぶ -->
+		  <div th:replace="~{fragments/task-edit :: editDialog(${task}, ${difficulties})}"></div>
 
 		  <form class="delete-form" th:action="@{'/tasks/' + ${task.id} + '/delete'}" method="post">
 		    <button class="btn-icon btn-delete" type="submit" title="削除">✖</button>

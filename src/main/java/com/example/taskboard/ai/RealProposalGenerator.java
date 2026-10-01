@@ -1,13 +1,19 @@
 package com.example.taskboard.ai;
 
 // ===== インポート =====
+// java.time.Duration  … 時間の長さ。待ち時間の上限に使う
 // java.util.ArrayList … リストの実装
 // java.util.List      … リストの型
 // java.util.Map       … 「見出し → 値」の組。送るJSONを組み立てるのに使う
 //
+// 以下はログの部品。Spring Boot に最初から入っているので、pom.xml に足すものは無い。
+// Logger        … ログを出す道具
+// LoggerFactory … そのクラス用の Logger を作る
+//
 // 以下は Spring の部品。
-// Value                 … application.yml の値をフィールドに読み込む
+// Value                 … application.yml の値を読み込む
 // ConditionalOnProperty … 設定の値によって、このクラスを使うかどうかを決める
+// SimpleClientHttpRequestFactory … 通信の細かい設定。待ち時間の上限をここで決める
 // MediaType             … 送るデータの種類（application/json）
 // Component             … Spring に管理させるクラスです、という印
 // RestClient            … 外部のサービスへ通信する道具
@@ -26,13 +32,17 @@ package com.example.taskboard.ai;
 // com.fasterxml.jackson ではなく tools.jackson から始まる。
 // 古い記事は com.fasterxml で書かれているので注意する。
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -51,7 +61,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * このアプリで唯一、外のサービスと通信する場所になる。
  * 外に出る以上、うまくいかないことは必ず起きる。
- * 混み合って断られる、1日の上限に達する、応答の形が崩れる。
+ * 混み合って断られる、1日の上限に達する、応答の形が崩れる、黙り込む。
  * そのため、失敗の扱いに多くの行数を割いている。
  *
  * 処理は4つに分かれている。
@@ -67,6 +77,27 @@ import tools.jackson.databind.ObjectMapper;
  * ここで投げた例外は ProposalService が受け止め、固定3案に切り替える。
  * つまりこのクラスは、失敗したら素直に失敗してよい。
  * 無理に何かを返そうとせず、投げたほうが後始末が1か所にまとまる。
+ *
+ * 【待ち時間の上限を決めている】
+ *
+ * 相手が黙り込むことがある。断られるのとは違い、応答そのものが返らない。
+ * 上限を決めていないと、そのあいだ画面は待ち続ける。
+ * 「迷っているより、まず実行」を掲げているアプリで、
+ * 押したきり何も起きない時間を作るわけにはいかない。
+ *
+ * 読み取りの上限は ai.timeout-seconds（既定10秒）から読む。
+ * 以前はこの設定を yml に書いていたが、読んでいなかった。
+ * 書いたつもりで効いていない設定は、あることのほうが危ない。
+ *
+ * 上限を超えたときは試し直さない。
+ * 10秒待って、また10秒待って、では利用者を30秒待たせることになる。
+ * そのまま例外にして、固定3案へ切り替えたほうが早い。
+ *
+ * 【設定はコンストラクタで受け取る】
+ *
+ * @Value をフィールドに付けると、値が入るのはクラスが作られたあとになる。
+ * 通信の道具は待ち時間の上限を決めてから作る必要があるので、
+ * それでは間に合わない。コンストラクタで受け取れば、作る前に値がそろう。
  */
 
 // ===== アノテーション =====
@@ -81,6 +112,14 @@ import tools.jackson.databind.ObjectMapper;
 public class RealProposalGenerator implements ProposalGenerator {
 
 	// ===== フィールド =====
+
+	/**
+	 * ログを出す道具。
+	 *
+	 * 再試行したことは warn で残す。
+	 * 動き続けてはいるが、続くようなら枠の使い方を見直す合図になる。
+	 */
+	private static final Logger log = LoggerFactory.getLogger(RealProposalGenerator.class);
 
 	/**
 	 * Gemini の呼び出し先。
@@ -104,31 +143,75 @@ public class RealProposalGenerator implements ProposalGenerator {
 	 */
 	private static final double TEMPERATURE = 0.8;
 
-	/** 外部へ通信する道具 */
-	private final RestClient rest = RestClient.create();
+	/**
+	 * つながるまで待つ上限（秒）。設計書 4.1 の値。
+	 *
+	 * 読み取りと違い、こちらは相手に届くまでの話なので短くてよい。
+	 * 5秒つながらないなら、回線か宛先の問題で、待っても変わらない。
+	 */
+	private static final int CONNECT_TIMEOUT_SECONDS = 5;
+
+	/** 画面に出せるカードの枚数。これを超えて返ってきても捨てる */
+	private static final int CARD_LIMIT = 3;
+
+	/** 外部へ通信する道具。待ち時間の上限を入れて作る */
+	private final RestClient rest;
 
 	/** JSON を Java のかたちに変換する道具 */
 	private final ObjectMapper mapper = new ObjectMapper();
 
-	/** 使うモデルの名前。application.yml の ai.model を読む */
-	@Value("${ai.model}")
-	private String model;
+	/** 使うモデルの名前 */
+	private final String model;
 
 	/**
-	 * APIキー。application.yml の ai.api-key を読む。
+	 * APIキー。
 	 *
 	 * yml には環境変数から読む指定だけを書き、値そのものは書かない。
 	 * コードにも yml にも書かないので、リポジトリに載ることがない。
 	 */
-	@Value("${ai.api-key}")
-	private String apiKey;
+	private final String apiKey;
 
 	/**
-	 * 何回まで試し直すか。application.yml の ai.max-attempts を読む。
-	 * 末尾の :3 は「設定が無ければ3」という既定値。
+	 * 何回まで試し直すか。
+	 *
+	 * 0 以下が設定されても1回は試すようにしている。
+	 * 0 だと繰り返しが一度も回らず、最後に「起きた失敗」を投げる行で
+	 * 何も入っていないものを投げることになる。
 	 */
-	@Value("${ai.max-attempts:3}")
-	private int maxAttempts;
+	private final int maxAttempts;
+
+	// ===== コンストラクタ =====
+
+	/**
+	 * 設定を受け取り、通信の道具を組み立てる。
+	 *
+	 * 末尾の :3 や :10 は「設定が無ければこの値」という既定値。
+	 *
+	 * @param model          使うモデルの名前
+	 * @param apiKey         APIキー
+	 * @param maxAttempts    試し直す回数の上限
+	 * @param timeoutSeconds 応答を待つ上限（秒）
+	 */
+	public RealProposalGenerator(
+			@Value("${ai.model}") String model,
+			@Value("${ai.api-key}") String apiKey,
+			@Value("${ai.max-attempts:3}") int maxAttempts,
+			@Value("${ai.timeout-seconds:10}") int timeoutSeconds) {
+
+		this.model = model;
+		this.apiKey = apiKey;
+
+		// 0 以下でも必ず1回は試す
+		this.maxAttempts = Math.max(maxAttempts, 1);
+
+		// 待ち時間の上限を決めてから通信の道具を作る。
+		// RestClient.create() だけだと上限が無く、相手が黙り込むと待ち続ける
+		SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+		factory.setConnectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS));
+		factory.setReadTimeout(Duration.ofSeconds(timeoutSeconds));
+
+		this.rest = RestClient.builder().requestFactory(factory).build();
+	}
 
 	// ===== メソッド =====
 
@@ -164,6 +247,10 @@ public class RealProposalGenerator implements ProposalGenerator {
 	 *
 	 * 403（キーが違う）や 404（モデル名が違う）は、待っても直らない。
 	 * すぐに投げて、呼び出す側へ渡す。
+	 *
+	 * 待ち時間の上限を超えた場合は、ここでは受け止めない。
+	 * そのまま外へ出て、ProposalService が固定3案に切り替える。
+	 * 10秒待ったうえでもう一度10秒待たせるより、そのほうが早い。
 	 *
 	 * @param prompt AI に送る文章
 	 * @return 3枚のカード
@@ -225,7 +312,7 @@ public class RealProposalGenerator implements ProposalGenerator {
 					throw lastError;
 				}
 
-				System.out.println("### Gemini 再試行 " + attempt + "回目 (status=" + status + ")");
+				log.warn("Gemini 再試行 {}回目 (status={})", attempt, status);
 				sleep(attempt);
 			}
 		}
@@ -300,12 +387,12 @@ public class RealProposalGenerator implements ProposalGenerator {
 						"estimatedMinutes", Map.of("type", "INTEGER"),
 						"reason",           Map.of("type", "STRING"),
 						"detail",           Map.of("type", "STRING",
-		                           "description",
-		                           "「✓」で始まる手順を3行、最後の1行は「おわりの目安: 」で始める（✓は付けない）。改行(\\n)区切り。最後の行は、やり終えたときに目で見える状態を書く。時間や気持ちは書かない")),
+						                           "description",
+						                           "「✓」で始まる手順を3行、最後の1行は「おわりの目安: 」で始める（✓は付けない）。改行(\\n)区切り。最後の行は、やり終えたときに目で見える状態を書く。時間や気持ちは書かない")),
 
-// 全部必須にする。1つでも欠けたら AI 側でやり直してくれる
-"required", List.of("title", "category", "granularity",
-		"difficulty", "estimatedMinutes", "reason", "detail"));
+				// 全部必須にする。1つでも欠けたら AI 側でやり直してくれる
+				"required", List.of("title", "category", "granularity",
+						"difficulty", "estimatedMinutes", "reason", "detail"));
 
 		return Map.of(
 				"type", "OBJECT",
@@ -322,6 +409,11 @@ public class RealProposalGenerator implements ProposalGenerator {
 	 *
 	 * 段ごとに確かめてから次へ進んでいる。
 	 * 途中が空のまま進むと、どこで失敗したのか分からない形で落ちる。
+	 *
+	 * content と parts も確かめている。
+	 * 長さの上限で切れたときなど、候補はあるのに本文が入っていないことがある。
+	 * 確かめずに進むと「どこかで null だった」としか分からない例外になり、
+	 * 原因が応答の中身にあることに気づけない。
 	 *
 	 * @SuppressWarnings("unchecked") は、型の警告を消す指定。
 	 * Map から取り出したものを List に変換するとき、
@@ -346,7 +438,16 @@ public class RealProposalGenerator implements ProposalGenerator {
 		}
 
 		Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
+
+		if (content == null) {
+			throw new IllegalStateException("content がありません: " + response);
+		}
+
 		List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
+
+		if (parts == null || parts.isEmpty()) {
+			throw new IllegalStateException("parts がありません: " + response);
+		}
 
 		return String.valueOf(parts.get(0).get("text"));
 	}
@@ -381,7 +482,7 @@ public class RealProposalGenerator implements ProposalGenerator {
 				throw new IllegalStateException("cards が配列ではありません: " + json);
 			}
 
-			int limit = Math.min(array.size(), 3);
+			int limit = Math.min(array.size(), CARD_LIMIT);
 
 			for (int i = 0; i < limit; i++) {
 				JsonNode node = array.get(i);

@@ -26,31 +26,34 @@
    同じセレクタを2回書くと、後ろが勝つ指定と前が残る指定が混ざる。
    エラーは出ないので、重複は必ず消す。
 
-   【前の版で直したこと】
+   【3回やった失敗】
 
-   上のルールを、自分で破っていた。
-   直したいところが出るたびにファイルの末尾へ足していった結果、
-   .app-title が4回、.card と .card-title が3回、.tabs と .btn-choose が2回、
-   .detail-done-at にいたっては中身まで同じものが2回書かれていた。
+   直したいところが出るたびに、ファイルの末尾へ足していった。
+   それを3回繰り返している。
+
+   　1回目 … .app-title が4回、.card と .card-title が3回、
+   　　　　　 .tabs と .btn-choose が2回。.detail-done-at は中身まで同じものが2回。
+   　2回目 … 最初の3問を作ったとき。.waiting-face / .profile-lead /
+   　　　　　 .choices / .choice が2回ずつ。
+   　　　　　 @media (prefers-reduced-motion) も2回で、中身が違うので両方が生きていた。
+   　3回目 … 選択肢の色分けを足したとき。18章の後ろに .choice の指定が並び、
+   　　　　　 @media (prefers-reduced-motion) がまた2つになっていた。
 
    足していくぶんには画面は正しく見える。後ろが勝つので、意図どおりに動く。
    困るのは読むときで、前の指定が生きているのか消されたのかが、
    最後まで読まないと分からない。直すのが怖いファイルになる。
 
-   【この版で直したこと】
+   【決めごと】
 
-   同じことをまたやっていた。最初の3問を作ったときに、末尾へ足していった。
+   　・新しい指定は、必ず対応する章の中に書く。末尾に足さない。
+   　・18章より後には何も置かない。ファイルはそこで終わり。
+   　・@media (prefers-reduced-motion) は18章の1つだけ。
 
-   　.waiting-face                    2回（後ろで浮かぶ動きを足していた）
-   　@media (prefers-reduced-motion)  2回（中身が違うので、両方が生きていた）
-   　.profile-lead                    2回（下の余白が 24px と 8px で食い違う）
-   　.choices                         2回（中身は同じ）
-   　.choice                          2回。しかも作りが違う
+   【消したもの】
 
-   .choice の2つは、ラジオボタンを包むラベル版と、送信ボタン版だった。
-   画面はボタンで作ってあるので、ラベル版はどこからも当たらない死んだ指定。
-   　.choice input / :has(input:checked) / :has(input:focus-visible)
-   これらをまとめて消した。
+   .choice をラジオボタンで作っていたころの指定一式
+   （.choice input / :has(input:checked) / :has(input:focus-visible)）。
+   画面はボタンで作ってあるので、どこからも当たらない死んだ指定だった。
 
    使わなくなった .btn-quiet も消した。
    ログアウトを中央に大きく置いて区別したので、色で分ける案そのものが不要になった。
@@ -760,8 +763,18 @@ body {
    一覧の上に重ねて出す。後ろが見えていることで「横にそれただけ」と伝わる。
    ========================================================================== */
 
+/* 幅は画面の92%まで。ただし560pxで止める。
+   min() は「小さいほうを使う」という指定。
+   スマホでは92vw、パソコンでは560pxになる。
+
+   470pxにしていたが、完了のヒントが4行あると窮屈に見えた。
+   ヒントは「靴をはいて玄関を出る」のような一文が何行も並ぶので、
+   折り返しが増えるほど手順として読みにくくなる。
+
+   これ以上広げると、後ろの一覧が見えなくなって
+   「別の画面へ移った」ように感じられる。重ねて出している意味が薄れる */
 .edit-dialog {
-  width: min(92vw, 470px);
+  width: min(92vw, 560px);
   border: 3px solid var(--ink);
   border-radius: var(--round-lg);
   box-shadow: 8px 8px 0 var(--ink);
@@ -790,7 +803,6 @@ body {
 
 .edit-actions .btn-cancel { flex: 1; }
 .edit-actions .btn-add    { flex: 2; margin: 0; }
-
 
 /* ==========================================================================
    9. 完了タスクの折りたたみ
@@ -1257,6 +1269,13 @@ body {
   box-shadow: 0 0 0 4px rgba(240, 51, 140, .18);
 }
 
+/* 処理中。通知の許可を待っているあいだ、push.js が押せなくする。
+   見た目が変わらないと、効かないスイッチを連打されることになる */
+.switch input:disabled + .switch-track {
+  opacity: .5;
+  cursor: wait;
+}
+
 /* --- 動作確認用のボタン ---
    通知の説明文と同じ行の右端に置く。
    ふだん押すものではないので、点線の枠で控えめにする */
@@ -1401,11 +1420,31 @@ body {
   text-align: center;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
+  transition: background .15s ease;
 }
 
+/* 触れたときの色。下の3色分けに上書きされるが、
+   どれにも当てはまらない並びになったときの受け皿として残す */
 .choice:hover {
   background: #fff0f6;
 }
+
+/* --- 選択肢の色分け ---
+   1つ目＝シアン、2つ目＝緑、3つ目＝ピンク。
+   提案画面の3枚と同じ並びにして、「3つから選ぶ」感じを揃える。
+
+   セレクタを2つ並べているのは、画面によって作りが違うため。
+   　1・2問目 … .choices の直下にボタンが3つ
+   　3問目    … .choices の直下がフォームで、その中にボタンが1つ */
+
+.choices > .choice:nth-child(1):hover,
+.choices > :nth-child(1) .choice:hover { background: #e6f9fb; }
+
+.choices > .choice:nth-child(2):hover,
+.choices > :nth-child(2) .choice:hover { background: #f2fbe6; }
+
+.choices > .choice:nth-child(3):hover,
+.choices > :nth-child(3) .choice:hover { background: #fdeaf3; }
 
 /* キーボードで移動してきたときに、どこにいるか分かるようにする */
 .choice:focus-visible {
@@ -1458,29 +1497,13 @@ body {
    18. 動きを減らす設定
 
    動きが苦手な人はブラウザ側で設定できる。それを尊重して止める。
-   1か所にまとめる。2つに分かれていると、片方に足し忘れる。
+
+   このまとまりは1つだけにする。2つに分かれていると、片方に足し忘れる。
+   実際そうなっていた。中身が違うので両方が生きてしまい、
+   どちらを直せばよいのか分からない状態だった。
+
+   ここがファイルの最後。これより下には何も置かない。
    ========================================================================== */
-
-@media (prefers-reduced-motion: reduce) {
-  .message,
-  .detail-toggle,
-  .waiting-dots span,
-  .waiting-face {
-    animation: none;
-    transition: none;
-  }
-}
-
-.choice { transition: background .15s ease; }
-
-.choices > .choice:nth-child(1):hover,
-.choices > :nth-child(1) .choice:hover { background: #e6f9fb; }
-
-.choices > .choice:nth-child(2):hover,
-.choices > :nth-child(2) .choice:hover { background: #f2fbe6; }
-
-.choices > .choice:nth-child(3):hover,
-.choices > :nth-child(3) .choice:hover { background: #fdeaf3; }
 
 @media (prefers-reduced-motion: reduce) {
   .message,

@@ -1,7 +1,7 @@
 package com.example.taskboard.domain;
 
 // ===== インポート =====
-// java.time.LocalDateTime … 日付＋時刻。押した時刻・決めた時刻に使う
+// java.time.LocalDateTime … 日付＋時刻。出した時刻・決めた時刻に使う
 // java.util.Objects       … null でも落ちずに比べる道具。equals で使う
 //
 // 以下は JPA の部品。
@@ -37,7 +37,7 @@ import jakarta.persistence.Table;
  * 「何を出して、何が選ばれなかったか」が、提案の質を測る材料になるため。
  *
  * requestedAt と decidedAt の差が「迷い時間」。
- * 押してから決めるまでにどれだけ止まっていたかが、そのまま記録になる。
+ * 詳しくは requestedAt の説明を見ること。
  *
  * promptText には、AIへ送った文章をそのまま保存している。
  * プロンプトを直していく期間は、送った文章そのものが残っているほうが役に立つ。
@@ -50,6 +50,37 @@ import jakarta.persistence.Table;
  * 数えるため。requestedAt の時から計算もできるが、そうすると
  * SituationJudge が持っている時間の区切りを SQL 側にも書くことになる。
  * 片方だけ変えたときに、静かに食い違う。
+ *
+ * 【mode の列を使うのをやめた】
+ *
+ * 以前は「どんな出し方をしたか」を入れる mode という列を持っていた。
+ * 復帰モードや試験前モードを作る想定だったが、どれも作らなかったので、
+ * 常に "NORMAL" が入るだけの列になっていた。
+ *
+ * 何もしていない項目が残っていると、読む人が意味を探すことになる。
+ * そこでフィールドを消した。
+ *
+ * 【フィールドを消すときは、テーブルの列も消す】
+ *
+ * フィールドを消すと、INSERT 文からその列が外れる。
+ * 列に NOT NULL が付いていると、値が入らないまま保存しようとして失敗する。
+ *
+ * 　列 "MODE" にはnull値が許されていません
+ *
+ * 画面では500になる。保存そのものが通らないので、
+ * 「スタートを押すと必ず落ちる」という形で出る。
+ *
+ * ddl-auto: update は、足りない列を足すことはしても、
+ * 余った列を消すことも、制約を緩めることもしない。
+ * 待っていても消えないので、自分で消す。
+ *
+ * 　ALTER TABLE proposal_sets DROP COLUMN mode;
+ *
+ * この1行を H2 と MySQL の両方で実行した。
+ * 過去の行には "NORMAL" しか入っていないので、失うものは無い。
+ *
+ * 片方だけ消すと、もう片方に切り替えた瞬間に同じ500が出る。
+ * 両方そろえておくこと。
  */
 
 // ===== アノテーション =====
@@ -72,13 +103,32 @@ public class ProposalSet {
 	private Long userId;
 
 	/**
-	 * スタートを押した時刻。
+	 * 3案が出そろった時刻。迷い時間の起点になる。
 	 *
-	 * 初期値をここに書かず、保存の直前に入れている。
-	 * 下の onCreate を見ること。
+	 * 【スタートを押した時刻ではない】
 	 *
-	 * decidedAt との差が迷い時間になるので、
-	 * 実際に押された時刻とずれると、記録の意味が失われる。
+	 * 名前からは押した時刻に見えるが、入っているのは
+	 * 「AIが3案を返して、画面に出せる状態になった時刻」。
+	 * ProposalService が AI を呼んだ"あと"にこのセットを組み立てるため。
+	 *
+	 * これは意図してこうしている。
+	 * 押してから3案が出るまでの3〜5秒は、AIを待っている時間であって、
+	 * 本人が迷っている時間ではない。
+	 * 押した時刻を起点にすると、どの回にも同じ数秒が上乗せされ、
+	 * 迷い時間の差が見えにくくなる。
+	 *
+	 * 迷い時間 ＝ decidedAt − requestedAt
+	 * 　　　　　＝ 3案を見てから、選ぶ（または別の案を見る）までの秒数
+	 *
+	 * 列の名前は作りはじめたときのまま残っている。
+	 * 名前を変えるとテーブルを作り直すことになるので、
+	 * ここに書いておくことで代えている。
+	 *
+	 * 【初期値をフィールドに書いていない理由】
+	 *
+	 * = LocalDateTime.now() と書くと「new した瞬間」の時刻が入る。
+	 * 下の onCreate は、万一入れ忘れたときに保存の直前で補うためのもの。
+	 * ふだんは ProposalService が入れた値がそのまま残る。
 	 */
 	@Column(name = "requested_at", nullable = false)
 	private LocalDateTime requestedAt;
@@ -104,15 +154,6 @@ public class ProposalSet {
 	private String timeOfDay;
 
 	/**
-	 * どんな出し方をしたか。いまは NORMAL だけ。
-	 *
-	 * 提案の出し方を増やしたときに、あとから区別できるようにしてある。
-	 * 使い道が増えなければ、列ごと消してよい。
-	 */
-	@Column(length = 20)
-	private String mode = "NORMAL";
-
-	/**
 	 * この3案がどこから来たか。AI / MOCK / FALLBACK のどれか。
 	 *
 	 * AIが失敗した回数を、あとから数えるために持っている。
@@ -135,7 +176,7 @@ public class ProposalSet {
 	/**
 	 * AIへ送った文章そのもの。
 	 *
-	 * 先頭にプロンプトの版（# prompt v5.1）が書き込まれているので、
+	 * 先頭にプロンプトの版（# prompt v5.4）が書き込まれているので、
 	 * 「どの版が、どんな3案を出したか」を突き合わせられる。
 	 *
 	 * ※ length は元のファイルの値をそのまま使うこと。
@@ -147,20 +188,18 @@ public class ProposalSet {
 	// ===== メソッド（保存の前に動くもの） =====
 
 	/**
-	 * 保存される直前に、押した時刻を入れる。
+	 * 保存される直前に、時刻が空なら入れる。
 	 *
 	 * @PrePersist が付いたメソッドは、JPA が insert の直前に呼ぶ。
 	 * 呼ぶのは自分ではなく、仕組みのほう。
 	 *
-	 * フィールドに = LocalDateTime.now() と書くと、
-	 * 「new した瞬間」の時刻が入る。
+	 * ふだんは動かない。ProposalService.newSet が必ず値を入れているため。
+	 * ここにあるのは、入れ忘れたときに
+	 * 「NOT NULL に違反して保存そのものが失敗する」のを避けるための備え。
 	 *
-	 * いまは押されてから作っているので差はほとんど無いが、
-	 * AIの応答を待つ数秒ぶんだけ、new と保存の間が空く。
-	 * 迷い時間の起点なので、実際に保存された時刻に揃えておく。
-	 *
-	 * すでに値が入っているときは触らない。
-	 * ProposalService が押した時刻を明示的に入れている場合は、そちらを優先する。
+	 * 補った場合、保存の直前の時刻が入る。
+	 * ふだん入る値（3案が出そろった時刻）とほぼ同じになるので、
+	 * 迷い時間の計算が大きく狂うことはない。
 	 */
 	@PrePersist
 	protected void onCreate() {
@@ -191,12 +230,12 @@ public class ProposalSet {
 		this.userId = userId;
 	}
 
-	/** スタートを押した時刻を返す */
+	/** 3案が出そろった時刻を返す。迷い時間の起点 */
 	public LocalDateTime getRequestedAt() {
 		return requestedAt;
 	}
 
-	/** スタートを押した時刻を入れる */
+	/** 3案が出そろった時刻を入れる */
 	public void setRequestedAt(LocalDateTime requestedAt) {
 		this.requestedAt = requestedAt;
 	}
@@ -219,16 +258,6 @@ public class ProposalSet {
 	/** このときの時間帯を入れる */
 	public void setTimeOfDay(String timeOfDay) {
 		this.timeOfDay = timeOfDay;
-	}
-
-	/** 出し方を返す。null のときは NORMAL として扱う */
-	public String getMode() {
-		return mode != null ? mode : "NORMAL";
-	}
-
-	/** 出し方を入れる */
-	public void setMode(String mode) {
-		this.mode = mode;
 	}
 
 	/**

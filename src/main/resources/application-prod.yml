@@ -1,5 +1,8 @@
 spring:
   datasource:
+    # serverTimezone は、TaskboardApplication の TimeZone.setDefault と同じ値にする。
+    # 片方だけ変えると、保存した時刻と読み出した時刻がずれる。
+    # ずれても例外は出ないので、完了日時や締切が9時間動いてから気づくことになる
     url: jdbc:mysql://localhost:3306/taskboard?serverTimezone=Asia/Tokyo&characterEncoding=utf8
     username: taskboard
     password: ${DB_PASSWORD:}

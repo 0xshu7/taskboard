@@ -1,8 +1,9 @@
 package com.example.taskboard.repository;
 
 // ===== インポート =====
-// java.time.LocalDate … 日付だけ。締切の範囲指定に使う
-// java.util.List      … リストの型。複数件を受け取るのに使う
+// java.time.LocalDate     … 日付だけ。締切の範囲指定に使う
+// java.time.LocalDateTime … 日付＋時刻。自動完了の予定時刻の比較に使う
+// java.util.List          … リストの型。複数件を受け取るのに使う
 //
 // 以下は Spring Data JPA の部品。
 // JpaRepository … 保存・取得・削除の基本的な処理をまとめて用意してくれる
@@ -32,7 +33,7 @@ import com.example.taskboard.domain.TaskStatus;
  *   And                … 条件をつなぐ
  *   Not                … 「〜でない」（SQL の <>）
  *   Between            … 範囲。両端を含む
- *   After / Before     … より後・より前
+ *   LessThanEqual      … 以下
  *   OrderBy…Asc / Desc … 並び順
  *
  * 条件に書く項目名は、Task のフィールド名と一致させる。
@@ -49,7 +50,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	/**
 	 * 完了していないタスク（未実施・進行中）を表示順で取る。
 	 *
-	 * SELECT * FROM tasks WHERE user_id = ? AND status <> ? ORDER BY sort_order ASC
+	 * SELECT * FROM tasks WHERE user_id = ? AND status &lt;&gt; ? ORDER BY sort_order ASC
 	 *
 	 * Not が付くので、渡した状態「以外」が対象になる。
 	 * DONE を渡すことで、未実施と進行中の両方が取れる。
@@ -80,7 +81,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	 * 締切が指定した期間内で、まだ完了していないタスクを、締切の近い順で取る。
 	 *
 	 * SELECT * FROM tasks
-	 * WHERE user_id = ? AND status <> ? AND due_date BETWEEN ? AND ?
+	 * WHERE user_id = ? AND status &lt;&gt; ? AND due_date BETWEEN ? AND ?
 	 * ORDER BY due_date ASC
 	 *
 	 * Between は両端を含む。今日と明日を渡すと、どちらの日も対象になる。
@@ -94,15 +95,24 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	 */
 	List<Task> findByUserIdAndStatusNotAndDueDateBetweenOrderByDueDateAsc(
 			Long userId, TaskStatus status, LocalDate from, LocalDate to);
-	
+
 	/**
 	 * 自動完了の時刻が来た進行中のタスクを探す。
 	 *
-	 * LessThanEqual は「以下」。いまの時刻を渡すと、
-	 * 予定時刻を過ぎたものが返る。
+	 * SELECT * FROM tasks WHERE status = ? AND auto_complete_at &lt;= ?
+	 *
+	 * LessThanEqual は「以下」。いまの時刻を渡すと、予定時刻を過ぎたものが返る。
 	 *
 	 * autoCompleteAt が null の行は、この条件では返らない。
 	 * 予約していないタスクが勝手に完了することはない。
+	 *
+	 * 利用者で絞っていない。
+	 * 10秒ごとに時計から呼ばれるので、そのときログインしている人がいないため。
+	 * 全員ぶんをまとめて取り、タスクが持つ userId から送り先を引く。
+	 *
+	 * @param status 対象の状態。DOING を渡す
+	 * @param time   この時刻以前に予約されたものを対象にする。いまの時刻を渡す
+	 * @return 完了にするべきタスク。無ければ空のリスト
 	 */
 	List<Task> findByStatusAndAutoCompleteAtLessThanEqual(TaskStatus status, LocalDateTime time);
 
@@ -111,7 +121,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	/**
 	 * 完了していないタスクの件数を数える。画面の「残り○件」に使う。
 	 *
-	 * SELECT COUNT(*) FROM tasks WHERE user_id = ? AND status <> ?
+	 * SELECT COUNT(*) FROM tasks WHERE user_id = ? AND status &lt;&gt; ?
 	 *
 	 * 一覧を取り出して数えることもできるが、
 	 * 件数だけが欲しいときは数える側で済ませたほうが無駄がない。

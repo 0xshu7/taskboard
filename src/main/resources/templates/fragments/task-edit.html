@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<!--
+	タスクの編集ダイアログ。
+
+	未完了の一覧と、完了の一覧の両方から呼ばれる。
+	以前は tasks.html に同じものが2回書いてあった。
+	項目を1つ足すだけで2か所を直すことになり、片方だけ直す事故が起きる。
+
+	fragments/logo.html と同じ考え方で、部品にして1か所にまとめている。
+
+	【呼び出し方】
+
+	<div th:replace="~{fragments/task-edit :: editDialog(${task}, ${difficulties})}"></div>
+
+	th:replace なので、この div は dialog そのものに置き換わる。
+	包みの div が残らないので、一覧の並びに影響しない。
+
+	【引数】
+
+	task         … 編集するタスク
+	difficulties … 難易度の選択肢。Difficulty.values() がそのまま入る
+
+	difficulties も渡しているのは、この部品が画面の変数を直接見ないようにするため。
+	受け取ったものだけで組み立てられるので、別の画面から呼んでも動く。
+
+	【id にタスクIDを付ける理由】
+
+	id は画面の中で1つだけでなければならない。
+	一覧には何件も並ぶので、"edit-" のような固定の名前にすると重複する。
+	重複するとエラーは出ないが、2件目以降のラベルが1件目の入力欄を指すようになる。
+-->
+<body>
+
+<dialog th:fragment="editDialog(task, difficulties)"
+        th:id="'edit-' + ${task.id}" class="edit-dialog">
+
+	<div class="edit-page">
+
+		<h2 class="edit-heading">タスクを編集</h2>
+
+		<form th:action="@{'/tasks/' + ${task.id} + '/update'}" method="post">
+
+			<div class="field">
+				<label th:for="'title-' + ${task.id}">タイトル</label>
+				<input type="text" th:id="'title-' + ${task.id}" name="title"
+				       th:value="${task.title}" maxlength="100" required autocomplete="off">
+			</div>
+
+			<div class="field">
+				<label th:for="'difficulty-' + ${task.id}">難易度</label>
+				<select th:id="'difficulty-' + ${task.id}" name="difficulty">
+					<option th:each="d : ${difficulties}"
+					        th:value="${d}" th:text="${d.label}"
+					        th:selected="${d == task.difficulty}">中</option>
+				</select>
+			</div>
+
+			<div class="field">
+				<label th:for="'due-' + ${task.id}">締切</label>
+				<input type="date" th:id="'due-' + ${task.id}" name="dueDate"
+				       th:value="${task.dueDate}">
+			</div>
+
+			<div class="field">
+				<label th:for="'detail-text-' + ${task.id}">完了のヒント</label>
+				<textarea th:id="'detail-text-' + ${task.id}" name="detail"
+				          rows="5" th:text="${task.detail}"></textarea>
+			</div>
+
+			<div class="edit-actions">
+				<button type="button" class="btn-cancel"
+				        onclick="this.closest('dialog').close()">キャンセル</button>
+				<button type="submit" class="btn-add">保存する</button>
+			</div>
+		</form>
+
+	</div>
+</dialog>
+
+</body>
+</html>

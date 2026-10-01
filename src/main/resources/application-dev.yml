@@ -12,3 +12,19 @@ spring:
     console:
       enabled: true
       path: /h2
+
+# このアプリが出すログだけ DEBUG にする。
+# 迷い時間や、AIが何秒で返したかが見えるようになる。
+#
+# dev に置くのは、prod で出しても読む人がいないため。
+# 発表でコンソールを見せるときに、要らない行が流れるのも避けたい。
+#
+# 他の部品（Spring や Hibernate）は既定の INFO のまま。
+# 全体を DEBUG にすると、起動時だけで数千行出て、自分のログが埋もれる。
+#
+# SQL は show-sql で別に出している。
+# logging.level.org.hibernate.SQL でも同じものが出せるが、
+# 二重に出ることになるので片方だけにしている
+logging:
+  level:
+    com.example.taskboard: DEBUG

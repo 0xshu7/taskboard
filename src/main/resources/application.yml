@@ -21,6 +21,8 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET:}
             scope: openid
 
+# ログの細かさは application-dev.yml に置いている。
+# ここに書くと prod でも DEBUG が出るため
 
 ai:
   mock: false

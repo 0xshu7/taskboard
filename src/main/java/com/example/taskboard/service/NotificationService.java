@@ -4,43 +4,50 @@ package com.example.taskboard.service;
 // java.nio.charset.StandardCharsets … 文字とバイトの変換のしかた。UTF-8 を指定する
 // java.time.LocalDate               … 日付だけ。締切の比較に使う
 // java.util.List                    … リストの型
+// java.util.Map                     … 「見出し → 値」の組。JSON にする前の形
+//
+// 以下はログの部品。Spring Boot に最初から入っているので、pom.xml に足すものは無い。
+// Logger        … ログを出す道具
+// LoggerFactory … そのクラス用の Logger を作る
 //
 // 以下は Spring の部品。
-// Scheduled     … 決まった時刻にメソッドを自動で動かす
-// Service       … 処理のまとまりです、という印。Spring が管理下に置く
-// Transactional … メソッドの途中で失敗したら、その中の保存をすべて取り消す
+// Scheduled … 決まった時刻にメソッドを自動で動かす
+// Service   … 処理のまとまりです、という印。Spring が管理下に置く
 //
 // 以下は外部のライブラリ。
+// ObjectMapper … Java の値を JSON の文字列に変える。Spring Boot 4 は Jackson 3 なので
+//                パッケージが tools.jackson.* になっている（2系は com.fasterxml.jackson.*）
 // Notification … 送る内容1件ぶん（届け先＋本文）
 // PushService  … 実際に送る係。PushConfig で作ったものを受け取る
 //
 // 以下はこのアプリの部品。
-// PushSubscription           … 通知の届け先1件
-// Task                       … タスク1件
-// TaskStatus                 … タスクの状態
-// User                       … 利用者1人
-// PushSubscriptionRepository … 届け先の出し入れ
-// TaskRepository             … タスクの出し入れ
-// UserRepository             … 利用者の出し入れ
+// PushSubscription … 通知の届け先1件
+// Task             … タスク1件
+// TaskStatus       … タスクの状態
+// User             … 利用者1人
+// TaskRepository   … タスクの出し入れ
+// UserRepository   … 利用者の出し入れ
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.example.taskboard.domain.PushSubscription;
 import com.example.taskboard.domain.Task;
 import com.example.taskboard.domain.TaskStatus;
 import com.example.taskboard.domain.User;
-import com.example.taskboard.repository.PushSubscriptionRepository;
 import com.example.taskboard.repository.TaskRepository;
 import com.example.taskboard.repository.UserRepository;
 
 import nl.martijndwars.webpush.Notification;
 import nl.martijndwars.webpush.PushService;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 毎朝の声かけを、ブラウザの通知で届ける。
@@ -69,6 +76,30 @@ import nl.martijndwars.webpush.PushService;
  * 「通知する設定なのに届け先が無い」という食い違いが、そもそも起きない。
  * 状態を2か所に持たないための判断。
  *
+ * 【このクラスに @Transactional を付けていない】
+ *
+ * 送信は外部への通信で、相手の応答を待つ時間が読めない。
+ * @Transactional を付けると、そのあいだデータベースの接続を握ったままになる。
+ * 届け先の数だけ繰り返すので、待ち時間が積み上がる。
+ *
+ * 接続を握るのは、使えなくなった届け先を消すときだけでよい。
+ * その削除は PushSubscriptionService に置いてある。
+ * 別のクラスにしたのは、同じクラスの中から呼ぶと @Transactional が効かないため。
+ *
+ * 【JSON は自分で組み立てない】
+ *
+ * 以前は文字列を足して作り、記号は自前の置き換えで直していた。
+ * だが直していたのは \ と " と改行の3つだけで、
+ * タスク名にタブや復帰（\r）が入ると、JSON として読めないものができる。
+ *
+ * そうなっても、送ること自体は成功して status=201 が返る。
+ * 壊れていることが分かるのは受け取る側（sw.js）で、
+ * そこで例外になって通知が出ない。
+ * ログには成功と出ているので、原因にたどり着くのが難しい形になる。
+ *
+ * ObjectMapper に任せれば、制御文字も含めて正しい形になる。
+ * 自分で書くより短く、抜けが出ない。
+ *
  * 【入口は2つ】
  *
  * checkAndNotify … 時計から呼ばれる。毎朝8時に、全員に対して送る。
@@ -84,6 +115,14 @@ public class NotificationService {
 
 	// ===== フィールド =====
 
+	/**
+	 * ログを出す道具。
+	 *
+	 * 通知は「送ったつもりで届いていない」が起きやすい。
+	 * 応答の番号だけは必ず残して、あとから追えるようにしてある。
+	 */
+	private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
+
 	/** 本文に並べるタスクの上限。3件目からは「など」でまとめる */
 	private static final int MAX_LINES = 2;
 
@@ -96,14 +135,21 @@ public class NotificationService {
 	/** 本文の最後に必ず置く声かけ */
 	private static final String CHEER = "今日もコツコツいきましょう！";
 
+	/**
+	 * Java の値を JSON の文字列に変える係。
+	 *
+	 * 1つ作って使い回す。中の設定を書き換えないので、同時に呼ばれても問題にならない。
+	 */
+	private final ObjectMapper objectMapper = new ObjectMapper();
+
 	/** タスクの出し入れ */
 	private final TaskRepository taskRepository;
 
 	/** 利用者の出し入れ。自動送信で全員を取り出すのに使う */
 	private final UserRepository userRepository;
 
-	/** 通知の届け先の出し入れ */
-	private final PushSubscriptionRepository subscriptionRepository;
+	/** 届け先の出し入れ。取り出しと、使えなくなったものの削除 */
+	private final PushSubscriptionService pushSubscriptionService;
 
 	/** いまログインしている利用者を教えてくれる係。試し送りで使う */
 	private final UserService userService;
@@ -119,13 +165,13 @@ public class NotificationService {
 	 */
 	public NotificationService(TaskRepository taskRepository,
 			UserRepository userRepository,
-			PushSubscriptionRepository subscriptionRepository,
+			PushSubscriptionService pushSubscriptionService,
 			UserService userService,
 			PushService pushService) {
 
 		this.taskRepository = taskRepository;
 		this.userRepository = userRepository;
-		this.subscriptionRepository = subscriptionRepository;
+		this.pushSubscriptionService = pushSubscriptionService;
 		this.userService = userService;
 		this.pushService = pushService;
 	}
@@ -137,6 +183,7 @@ public class NotificationService {
 	 *
 	 * cron は左から「秒 分 時 日 月 曜日」の6つ。
 	 * "0 0 8 * * *" は「毎日8時0分0秒」という意味。* は「すべて」を表す。
+	 * どの時間帯で動くかは、起動時に決めた時間帯に従う（TaskboardApplication）。
 	 *
 	 * 時刻を選べるようにはしていない。
 	 * 設定項目が増えるほど、使い始めるまでに決めることが増える。
@@ -150,7 +197,6 @@ public class NotificationService {
 	 * いまの人数では違いが出ないので、そのときに直す。
 	 */
 	@Scheduled(cron = "0 0 8 * * *")
-	@Transactional
 	public void checkAndNotify() {
 		for (User user : userRepository.findAll()) {
 			sendFor(user);
@@ -162,11 +208,7 @@ public class NotificationService {
 	 *
 	 * 時刻は見ない。押されたら必ず処理する。
 	 * 通知が届くかどうかと、本文がどう見えるかを、その場で確かめるためのもの。
-	 *
-	 * @Transactional を付けているのは、使えなくなった届け先を消す処理があるため。
-	 * delete で始まるリポジトリのメソッドは、これが無いと実行時に失敗する。
 	 */
-	@Transactional
 	public void sendNow() {
 		sendFor(userService.current());
 	}
@@ -199,13 +241,20 @@ public class NotificationService {
 	 *
 	 * 朝の声かけと、自動完了の通知の両方から呼ばれる。
 	 * 送る仕組みはここ1か所にまとめてある。
+	 *
+	 * @param user  送る相手
+	 * @param title 通知の見出し
+	 * @param body  通知の本文
 	 */
 	public void send(User user, String title, String body) {
-		// JSONを組み立てる。sw.js がこれを受け取って画面に出す。
-		// 改行や引用符をそのまま入れると JSON として読めなくなるので、escape で直す
-		String payload = "{\"title\":\"" + escape(title) + "\",\"body\":\"" + escape(body) + "\"}";
 
-		for (PushSubscription subscription : subscriptionRepository.findByUserId(user.getId())) {
+		// JSON を組み立てる。sw.js がこれを受け取って画面に出す。
+		// 記号や改行の扱いは ObjectMapper が面倒を見るので、
+		// 本文を作るほうでは何も気にしなくてよい
+		String payload = objectMapper.writeValueAsString(
+				Map.of("title", title, "body", body));
+
+		for (PushSubscription subscription : pushSubscriptionService.findFor(user.getId())) {
 
 			try {
 				// 本文はバイトの並びで渡す。
@@ -221,45 +270,28 @@ public class NotificationService {
 						payload.getBytes(StandardCharsets.UTF_8)));
 
 				int status = response.getStatusLine().getStatusCode();
-				System.out.println("### 通知の送信 status=" + status);
+				log.info("通知の送信 status={}", status);
 
 				// 201 が成功。404 と 410 は「その届け先はもう無い」という意味。
 				// 相手は例外を投げてくれないので、応答の番号を自分で見ないと気づけない。
 				// 残しておくと、毎回失敗する送信を繰り返すことになる
 				if (status == 404 || status == 410) {
-					System.out.println("### 届け先が無効になっていたので削除します");
-					subscriptionRepository.deleteByEndpoint(subscription.getEndpoint());
+					log.warn("届け先が無効になっていたので削除します status={}", status);
+					pushSubscriptionService.removeDead(subscription.getEndpoint());
 				}
 
 			} catch (Exception e) {
 				// 送ること自体に失敗した。次の届け先へ進む。
 				// ネットワークが一時的に切れただけのこともあるので、届け先は消さない。
-				// 届け先そのものはログに出さない。長い文字列で、端末を指すものなので
-				System.out.println("### 通知の送信に失敗: " + e.getMessage());
+				//
+				// 例外そのものではなく、言葉だけを出している。
+				// 第2引数に e を渡すと中身の経路が全部出るが、
+				// 一時的な切断で毎回それが出ると、本当の不具合が埋もれる。
+				//
+				// 届け先そのものもログに出さない。長い文字列で、端末を指すものなので
+				log.warn("通知の送信に失敗: {}", e.getMessage());
 			}
 		}
-	}
-
-	/**
-	 * JSON の文字列に入れられる形に直す。
-	 *
-	 * 3つを置き換える。順番が大事で、\ を最初にする。
-	 * あとにすると、他の置き換えで足した \ まで二重に置き換えてしまう。
-	 *
-	 *   \    … \\ にする
-	 *   "    … \" にする（ここで文字列が終わったと誤解されるため）
-	 *   改行 … \n という2文字にする（JSON の中に生の改行は書けない）
-	 *
-	 * ここでまとめて処理するので、本文を組み立てるほうでは記号を気にしなくてよい。
-	 *
-	 * @param text 元の文字
-	 * @return JSON に入れられる形
-	 */
-	private String escape(String text) {
-		return text
-				.replace("\\", "\\\\")
-				.replace("\"", "\\\"")
-				.replace("\n", "\\n");
 	}
 
 	/**
@@ -337,18 +369,31 @@ public class NotificationService {
 	 * 通知は横幅が決まっているので、長い名前をそのまま出すと
 	 * 2行に折り返して、2件目や声かけが押し出される。
 	 *
-	 * 絵文字が入っていると1文字を2つと数えることがあるが、
-	 * その分だけ短く切られるだけで、表示は崩れないのでこのままにしている。
+	 * 【length と substring をそのまま使っていない理由】
+	 *
+	 * Java の文字列は、2バイトの枠をいくつ並べたか、で長さを持っている。
+	 * ほとんどの文字は1枠で収まるが、絵文字などは2枠で1文字を表す。
+	 *
+	 * length はその枠の数を返すので、絵文字が入ると字数が多めに数えられる。
+	 * さらに substring は、切る位置が2枠の途中に来たとき片方だけを残す。
+	 * 片方だけでは文字にならないので、画面には「�」が出る。
+	 *
+	 * codePointCount は「文字として何個あるか」を数え、
+	 * offsetByCodePoints は「文字として15個ぶん進んだ位置」を返す。
+	 * この2つを使えば、絵文字を割らずに切れる。
 	 *
 	 * @param title 元のタスク名
 	 * @return 15字までに収めた名前
 	 */
 	private String cut(String title) {
 
-		if (title.length() <= TITLE_LIMIT) {
+		if (title.codePointCount(0, title.length()) <= TITLE_LIMIT) {
 			return title;
 		}
 
-		return title.substring(0, TITLE_LIMIT) + "…";
+		// 15文字ぶん進んだ位置を求めてから切る
+		int end = title.offsetByCodePoints(0, TITLE_LIMIT);
+
+		return title.substring(0, end) + "…";
 	}
 }

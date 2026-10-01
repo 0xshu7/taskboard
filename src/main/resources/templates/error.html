@@ -15,12 +15,36 @@
     <div th:replace="~{fragments/logo :: appTitle}"></div>
   </header>
 
-  <!-- 何が起きたかは書かない。
+  <!-- 何が起きたかの詳しい中身は書かない。
        内部の事情を画面に出さないという方針（application.yml の
        spring.web.error.include-message: never）と揃える。
-       状態コードだけ出しておけば、開発中に見分けはつく -->
+
+       ただし、どんな失敗でも同じ文を出すのはやめた。
+       以前は常に「ページが見つかりませんでした」と出していたので、
+       500 が起きたときに「500」と「見つかりません」が並び、
+       読んだ人が何を直せばよいか分からない形になっていた。
+
+       状態コードごとに、利用者が次に何をすればよいかだけを変える。
+       原因そのものはログに残っているので、画面には出さなくてよい -->
   <p class="error-code" th:text="${status}">404</p>
-  <p class="error-text">ページが見つかりませんでした</p>
+
+  <!-- 404。URLを打ち間違えたか、消したものを開こうとした。
+       他人のものを指したときもここに来る（NotFoundException） -->
+  <p class="error-text" th:if="${status != null and status == 404}">
+    ページが見つかりませんでした
+  </p>
+
+  <!-- 403。合言葉（CSRF）が合わないときなど。
+       時間を置いて開き直すと直ることが多い -->
+  <p class="error-text" th:if="${status != null and status == 403}">
+    このページは開けませんでした
+  </p>
+
+  <!-- それ以外。500 など、こちら側の不具合 -->
+  <p class="error-text"
+     th:if="${status == null or (status != 404 and status != 403)}">
+    うまく表示できませんでした
+  </p>
 
   <nav class="nav">
     <a class="btn-start" th:href="@{/}">🚀 スタートにもどる</a>

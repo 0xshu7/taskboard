@@ -9,6 +9,9 @@
  * 3. もらった届け先をサーバーへ送る
  *
  * 2 で断られたら、そこで終わり。あとから設定を変えるにはブラウザ側の操作が要る。
+ *
+ * どの段階で止まっても、スイッチは切に戻す。
+ * 「入っているのに届かない」という食い違いを残さないため。
  */
 
 // ===== 準備 =====
@@ -72,7 +75,16 @@ function postJson(url, data) {
 /**
  * 通知の許可をもらい、届け先をサーバーに登録する。
  *
- * @return 成功したら true、断られたら false
+ * 途中で失敗したときも false を返す。
+ * 例外のまま外へ出すと、呼び出し側の「切に戻す」行まで届かず、
+ * スイッチが入のまま、届け先は登録されていない状態になる。
+ *
+ * 起きうるのは次のような場合。
+ * ・VAPID の公開鍵が空、または形が正しくない
+ * ・サービスワーカーの登録に失敗した
+ * ・端末側の事情で subscribe が断られた
+ *
+ * @return 成功したら true、できなかったら false
  */
 async function enablePush() {
 
@@ -82,40 +94,65 @@ async function enablePush() {
 		return false;
 	}
 
-	// 1. サービスワーカーを登録する。
-	//    すでに登録済みなら、そのまま同じものが返る
-	const registration = await navigator.serviceWorker.register("/sw.js");
-
-	// 登録が終わって使える状態になるまで待つ
-	await navigator.serviceWorker.ready;
-
-	// 2. 許可を求める。ブラウザが画面の上に確認を出す
-	const permission = await Notification.requestPermission();
-
-	if (permission !== "granted") {
-		alert("通知が許可されませんでした。ブラウザの設定から変えられます。");
+	// 鍵が無いまま進むと、後ろの subscribe が分かりにくい形で失敗する。
+	// 先に見ておけば、原因が設定にあることがすぐ分かる
+	if (!vapidPublicKey) {
+		console.error("VAPID の公開鍵が設定されていません");
+		alert("通知の設定が済んでいません。管理者に連絡してください。");
 		return false;
 	}
 
-	// 3. 届け先を作る。
-	//    userVisibleOnly は「必ず画面に表示する通知にだけ使う」という約束。
-	//    false にはできない決まりになっている
-	const subscription = await registration.pushManager.subscribe({
-		userVisibleOnly: true,
-		applicationServerKey: toBytes(vapidPublicKey)
-	});
+	try {
+		// 1. サービスワーカーを登録する。
+		//    すでに登録済みなら、そのまま同じものが返る
+		const registration = await navigator.serviceWorker.register("/sw.js");
 
-	// 届け先は JSON にすると { endpoint, keys: { p256dh, auth } } の形になる。
-	// サーバー側の入れ物は平らな3項目なので、ここで並べ直す
-	const json = subscription.toJSON();
+		// 登録が終わって使える状態になるまで待つ
+		await navigator.serviceWorker.ready;
 
-	await postJson("/push/subscribe", {
-		endpoint: json.endpoint,
-		p256dh: json.keys.p256dh,
-		auth: json.keys.auth
-	});
+		// 2. 許可を求める。ブラウザが画面の上に確認を出す
+		const permission = await Notification.requestPermission();
 
-	return true;
+		if (permission !== "granted") {
+			alert("通知が許可されませんでした。ブラウザの設定から変えられます。");
+			return false;
+		}
+
+		// 3. 届け先を作る。
+		//    userVisibleOnly は「必ず画面に表示する通知にだけ使う」という約束。
+		//    false にはできない決まりになっている
+		const subscription = await registration.pushManager.subscribe({
+			userVisibleOnly: true,
+			applicationServerKey: toBytes(vapidPublicKey)
+		});
+
+		// 届け先は JSON にすると { endpoint, keys: { p256dh, auth } } の形になる。
+		// サーバー側の入れ物は平らな3項目なので、ここで並べ直す
+		const json = subscription.toJSON();
+
+		const response = await postJson("/push/subscribe", {
+			endpoint: json.endpoint,
+			p256dh: json.keys.p256dh,
+			auth: json.keys.auth
+		});
+
+		// サーバーが受け取れなかったら、ブラウザ側の登録も戻す。
+		// 片方だけ残すと、受け取る準備はできているのに誰も送ってこない状態になる
+		if (!response.ok) {
+			await subscription.unsubscribe();
+			alert("通知の登録に失敗しました。もう一度お試しください。");
+			return false;
+		}
+
+		return true;
+
+	} catch (error) {
+		// ここに来るのは、想定していない失敗。
+		// 何が起きたかはコンソールに残し、画面には短く伝える
+		console.error("通知の登録に失敗しました", error);
+		alert("通知を入にできませんでした。もう一度お試しください。");
+		return false;
+	}
 }
 
 // ===== 通知を切にする =====
@@ -126,6 +163,10 @@ async function enablePush() {
  * 両方やらないと、片方だけ残る。
  * サーバーだけ消すとブラウザは受け取る準備をしたまま、
  * ブラウザだけ解除するとサーバーは送り続けて毎回失敗する。
+ *
+ * 失敗しても例外を外に出さない。
+ * 切ろうとしたのに途中で止まると、スイッチの見た目だけが入に戻る。
+ * 利用者から見れば「切ったのに切れない」ことになる。
  */
 async function disablePush() {
 
@@ -133,15 +174,20 @@ async function disablePush() {
 		return;
 	}
 
-	const registration = await navigator.serviceWorker.ready;
-	const subscription = await registration.pushManager.getSubscription();
+	try {
+		const registration = await navigator.serviceWorker.ready;
+		const subscription = await registration.pushManager.getSubscription();
 
-	if (subscription === null) {
-		return;
+		if (subscription === null) {
+			return;
+		}
+
+		await postJson("/push/unsubscribe", { endpoint: subscription.endpoint });
+		await subscription.unsubscribe();
+
+	} catch (error) {
+		console.error("通知の解除に失敗しました", error);
 	}
-
-	await postJson("/push/unsubscribe", { endpoint: subscription.endpoint });
-	await subscription.unsubscribe();
 }
 
 // ===== 画面につなぐ =====
@@ -162,15 +208,24 @@ document.addEventListener("change", async function (event) {
 
 	const toggle = event.target;
 
-	if (toggle.checked) {
-		// 許可されなかったら、切に戻す。
-		// 入っているのに届かない、という食い違いを残さない
-		const ok = await enablePush();
-		if (!ok) {
-			toggle.checked = false;
+	// 処理中に何度も切り替えられないようにする。
+	// 許可の確認が出ているあいだも、スイッチ自体は押せてしまうため
+	toggle.disabled = true;
+
+	try {
+		if (toggle.checked) {
+			// できなかったら切に戻す。
+			// 入っているのに届かない、という食い違いを残さない
+			const ok = await enablePush();
+			if (!ok) {
+				toggle.checked = false;
+			}
+		} else {
+			await disablePush();
 		}
-	} else {
-		await disablePush();
+	} finally {
+		// 成功しても失敗しても、必ず押せる状態に戻す
+		toggle.disabled = false;
 	}
 });
 
@@ -181,6 +236,11 @@ document.addEventListener("click", async function (event) {
 		return;
 	}
 
-	await postJson("/push/test", {});
-	alert("送信しました。数秒で届きます。");
+	const response = await postJson("/push/test", {});
+
+	if (response.ok) {
+		alert("送信しました。数秒で届きます。");
+	} else {
+		alert("送信できませんでした。通知が入になっているか確かめてください。");
+	}
 });

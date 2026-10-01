@@ -7,7 +7,13 @@ package com.example.taskboard.service;
 // java.util.HashMap       … 「見出し → 値」の組の実装。分野ごとの重みに使う
 // java.util.List          … リストの型
 // java.util.Map           … 「見出し → 値」の組の型
-// java.util.Random        … くじ引き
+//
+// java.util.concurrent.ThreadLocalRandom
+//   … くじ引き。スレッドごとに別のものが用意されるので、取り合いが起きない
+//
+// 以下はログの部品。Spring Boot に最初から入っているので、pom.xml に足すものは無い。
+// Logger        … ログを出す道具
+// LoggerFactory … そのクラス用の Logger を作る
 //
 // 以下は Spring の部品。
 // Service       … 処理のまとまりです、という印。Spring が管理下に置く
@@ -34,8 +40,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,6 +89,32 @@ import com.example.taskboard.repository.ProposalSetRepository;
  * 呼び出しに失敗した場合は FallbackCards の固定3案に切り替える。
  * どこから来た3案かは ProposalSet.source に残すので、
  * あとから「AI が何割失敗したか」を数えられる。
+ *
+ * 【AIを待っているあいだ、データベースの接続を握らない】
+ *
+ * 以前は start と retopic に @Transactional が付いていた。
+ * generateSet はその中から呼ばれるので、
+ * AI の応答を待つ3〜5秒のあいだ、接続を握ったままになっていた。
+ * 握っているあいだ、その接続は他の画面に回せない。
+ *
+ * いまは、その2つから @Transactional を外してある。
+ * 材料を集める読み出しは、それぞれが短く済ませる。
+ * 書き込みだけを ProposalStore にまとめ、保存する一瞬だけ握る。
+ *
+ * 保存を別のクラスに置いたのは、ここに書いても効かないため。
+ * **同じクラスの中から自分のメソッドを呼ぶと @Transactional は無視される。**
+ * Spring は外から呼ばれたときだけ横取りできる。@Async が効かなかったのと同じ理由。
+ *
+ * choose だけは @Transactional を残している。
+ * 外部への通信が無く、カードとタスクとセットの3つを同時に動かすため。
+ * こちらは controller から直接呼ばれるので、きちんと効く。
+ *
+ * 【generateSet の中身を4つに分けている】
+ *
+ * 材料を集める → 文章を作る → AIを呼ぶ → 保存する、の4段階で読める。
+ * 最初の2つは上から下へ読めばいいだけなので generateSet に残し、
+ * 残りを callGenerator / newSet / numberCards に切り出した。
+ * どこで何が起きるかを、メソッドの名前で分かるようにするため。
  *
  * 【AI に渡す材料】
  *
@@ -128,7 +162,6 @@ import com.example.taskboard.repository.ProposalSetRepository;
  * 「やりなおせます」という言葉と、実際の動きをそろえるため。
  *
  * これは機械学習ではない。数えて割って足すだけで、学習するモデルは無い。
- * 多腕バンディットのいちばん単純な形にあたる。
  *
  * 【他人のものに触れないようにする】
  *
@@ -148,6 +181,19 @@ import com.example.taskboard.repository.ProposalSetRepository;
 public class ProposalService {
 
 	// ===== フィールド =====
+
+	/**
+	 * ログを出す道具。
+	 *
+	 * 重さは3つに分けてある。
+	 * 　warn  … AI が落ちてフォールバックに切り替わった
+	 * 　info  … AI の応答にかかった時間と、どこから来た3案か
+	 * 　debug … 分野の重みと、迷い時間
+	 *
+	 * 下の2つは提案の中身を追うためのもので、普段は要らない。
+	 * 見たいときは設定で debug に下げる。
+	 */
+	private static final Logger log = LoggerFactory.getLogger(ProposalService.class);
 
 	/**
 	 * 「最近やったこと」として AI に渡す件数。
@@ -176,26 +222,23 @@ public class ProposalService {
 	 */
 	private static final LocalDateTime EPOCH = LocalDateTime.of(2000, 1, 1, 0, 0);
 
-	/** 提案セットの出し入れ */
+	/** 3枚目のカードに振られる番号 */
+	private static final int PICKED_POSITION = 3;
+
+	/** 提案セットの出し入れ。所有者を確かめる findSet だけが使う */
 	private final ProposalSetRepository setRepository;
 
-	/** 提案カードの出し入れ */
+	/** 提案カードの出し入れ。取り出しと、分野ごとの集計に使う */
 	private final ProposalCardRepository cardRepository;
+
+	/** 提案の書き込み。ここだけがデータベースの接続を握る */
+	private final ProposalStore proposalStore;
 
 	/** 日時から「いまどんな状況か」と「どの分野を出すか」を決める */
 	private final SituationJudge situationJudge;
 
 	/** AI に送る文章を組み立てる */
 	private final PromptBuilder promptBuilder;
-
-	/**
-	 * 3つ目に使うタスクを選ぶためのくじ引き。
-	 * すすめ方が未回答のときだけ使う。
-	 *
-	 * 呼ぶたびに new すると、短い間に呼ばれたとき同じ値が続くことがある。
-	 * 1つ作って使い回す。
-	 */
-	private final Random random = new Random();
 
 	/**
 	 * 3案を作る係。
@@ -212,6 +255,21 @@ public class ProposalService {
 	/** いまログインしている利用者を教えてくれる係 */
 	private final UserService userService;
 
+	// ===== 内部の入れ物 =====
+
+	/**
+	 * AI を呼んだ結果。3案と、その出どころ。
+	 *
+	 * 2つまとめて返したいだけなので、このクラスの中だけの入れ物にしている。
+	 * record は「値を持つだけの型」を1行で書くための書き方で、
+	 * 取り出しは cards()・source() のように呼ぶ。
+	 *
+	 * @param cards  3枚のカード
+	 * @param source どこから来たか（AI / FALLBACK / MOCK）
+	 */
+	private record Generated(List<ProposalCard> cards, String source) {
+	}
+
 	// ===== コンストラクタ =====
 
 	/**
@@ -223,6 +281,7 @@ public class ProposalService {
 	 */
 	public ProposalService(ProposalSetRepository setRepository,
 			ProposalCardRepository cardRepository,
+			ProposalStore proposalStore,
 			SituationJudge situationJudge,
 			PromptBuilder promptBuilder,
 			ProposalGenerator generator,
@@ -231,6 +290,7 @@ public class ProposalService {
 
 		this.setRepository = setRepository;
 		this.cardRepository = cardRepository;
+		this.proposalStore = proposalStore;
 		this.situationJudge = situationJudge;
 		this.promptBuilder = promptBuilder;
 		this.generator = generator;
@@ -246,9 +306,11 @@ public class ProposalService {
 	 * 押されるたびに新しく作る。前のセットは探さない。
 	 * 押さずに離れたセットは OPEN のまま残るが、それも記録として意味がある。
 	 *
+	 * @Transactional は付けない。
+	 * 途中で AI を呼ぶので、付けるとその待ち時間ぶん接続を握ることになる。
+	 *
 	 * @return 表示する3案のセット
 	 */
-	@Transactional
 	public ProposalSet start() {
 		return generateSet(List.of());
 	}
@@ -256,11 +318,11 @@ public class ProposalService {
 	/**
 	 * 3案を作って保存する。
 	 *
-	 * AI の呼び出しに失敗した場合は固定3案に切り替える。
-	 * ここで例外を外に出さないことが、「AIが落ちてもアプリは止まらない」を成り立たせている。
+	 * 上から順に、材料を集める → 文章を作る → AIを呼ぶ → 保存する、の4段階。
+	 * 後ろの3つは別のメソッドに切り出してあるので、ここには流れだけが残る。
 	 *
-	 * 応答にかかった時間と、どこから来た3案かをログに出す。
-	 * 速さの改善は、推測ではなく計測して判断する。
+	 * 保存だけが ProposalStore を通る。
+	 * 材料を集める読み出しは、それぞれが短く終わるので、まとめて囲まない。
 	 *
 	 * 前回の3案を受け取るのは「別の話題にする」のときだけ。
 	 * そこから2つのことを決める。
@@ -273,7 +335,6 @@ public class ProposalService {
 	 * @param previousCards 前回の3案。スタートのときは空
 	 * @return 保存した3案のセット
 	 */
-	@Transactional
 	public ProposalSet generateSet(List<ProposalCard> previousCards) {
 
 		// 最初の3択の答えを持っている。未回答なら中身が null
@@ -317,31 +378,76 @@ public class ProposalService {
 		String prompt = promptBuilder.buildProposal(
 				situation, activeTasks, pickedTask, doneTasks, excludeTitles);
 
+		// ここで3〜5秒待つ。接続は握っていない
+		Generated generated = callGenerator(prompt, situation, pickedTask);
+
+		numberCards(generated.cards(), pickedTask, generated.source());
+
+		return proposalStore.save(
+				newSet(user, situation, prompt, generated.source()),
+				generated.cards());
+	}
+
+	/**
+	 * AI を呼んで3案を受け取る。失敗したら固定3案に切り替える。
+	 *
+	 * ここで例外を外に出さないことが、「AIが落ちてもアプリは止まらない」を成り立たせている。
+	 *
+	 * try の中には generator.generate しか入れていない。
+	 * 範囲を広げると、見つからなかったことまで「AIの失敗」として
+	 * 固定3案にすり替わり、原因が見えなくなる。
+	 *
+	 * 失敗は warn で出す。アプリは動き続けるので error ではないが、
+	 * 続くようなら調べたいことなので、普段から見える重さにしておく。
+	 *
+	 * 応答にかかった時間と、どこから来た3案かも残す。
+	 * 速さの改善は、推測ではなく計測して判断する。
+	 *
+	 * @param prompt     送る文章
+	 * @param situation  いまの状況。固定3案を作るときに使う
+	 * @param pickedTask 3件目に使うタスク。無ければ null
+	 * @return 3案と、その出どころ
+	 */
+	private Generated callGenerator(String prompt, Situation situation, Task pickedTask) {
+
 		List<ProposalCard> cards;
 		String source;
 
 		long begin = System.currentTimeMillis();
 
-		// この catch が受けるのは、AI の呼び出しの失敗だけ。
-		// try の中には generator.generate しか入れていないので、
-		// 所有者の確認で投げる NotFoundException がここに紛れ込むことはない。
-		// 範囲を広げると、見つからなかったことまで「AIの失敗」として
-		// 固定3案にすり替わり、原因が見えなくなる。
 		try {
 			cards = generator.generate(prompt);
 			source = generator.sourceName();
 
 		} catch (RuntimeException e) {
-			System.out.println("### AI 失敗のためフォールバック: " + e.getMessage());
+			log.warn("AI 失敗のためフォールバック: {}", e.getMessage());
 			cards = FallbackCards.create(situation, pickedTask);
 			source = "FALLBACK";
 		}
 
-		System.out.println("### AI 応答 " + (System.currentTimeMillis() - begin)
-				+ " ms / source=" + source);
+		log.info("AI 応答 {} ms / source={}", System.currentTimeMillis() - begin, source);
 
-		// セットを先に保存する。カードが持つ proposalSetId を決めるために、
-		// セットの id が先に必要になるため。
+		return new Generated(cards, source);
+	}
+
+	/**
+	 * 保存するセットを組み立てる。まだ保存はしない。
+	 *
+	 * 値を入れるだけなので、データベースには触らない。
+	 * 保存は ProposalStore.save がまとめて行う。
+	 *
+	 * ここが呼ばれるのは AI を呼んだあとなので、
+	 * requestedAt に入るのは「3案が出そろった時刻」になる。
+	 * 待っていた3〜5秒を迷い時間に数えないための形。詳しくは ProposalSet を見ること。
+	 *
+	 * @param user      いまの利用者
+	 * @param situation いまの状況。時間帯を残すために使う
+	 * @param prompt    送った文章。そのまま残す
+	 * @param source    どこから来た3案か
+	 * @return まだ保存していないセット
+	 */
+	private ProposalSet newSet(User user, Situation situation, String prompt, String source) {
+
 		ProposalSet set = new ProposalSet();
 		set.setUserId(user.getId());
 		set.setRequestedAt(LocalDateTime.now());
@@ -349,35 +455,43 @@ public class ProposalService {
 		set.setSource(source);
 		set.setTimeOfDay(situation.getTimeOfDay());
 		set.setPromptText(prompt);
-		setRepository.save(set);
 
-		// 3枚に1〜3の番号を振って保存する。
-		// この番号が表示順であり、同時に重さの役割も表す。
+		return set;
+	}
+
+	/**
+	 * 3枚のカードに番号を振る。まだ保存はしない。
+	 *
+	 * 番号が表示順であり、同時に重さの役割も表す。
+	 *
+	 * 3枚目だけ、元になったタスクを覚えておく。
+	 * 選ばれたとき、新しく作らずにそのタスクを進行中にするため。
+	 *
+	 * 除くのはモックだけ。
+	 * モックは状況も指定タスクも受け取らないので、無関係な3枚目を返す。
+	 * それに題名を貼ると、中身とタイトルが食い違う。
+	 *
+	 * フォールバックは、指定タスクをそのまま3枚目に使うようになったので
+	 * 紐づけてよい。紐づけないと、選んだときに同じ題名のタスクが
+	 * もう1件できてしまう。
+	 *
+	 * @param cards      3枚のカード
+	 * @param pickedTask 3件目に使うタスク。無ければ null
+	 * @param source     どこから来た3案か
+	 */
+	private void numberCards(List<ProposalCard> cards, Task pickedTask, String source) {
+
 		int position = 1;
+
 		for (ProposalCard card : cards) {
-			card.setProposalSetId(set.getId());
 			card.setPosition(position);
 
-			// 3枚目だけ、元になったタスクを覚えておく。
-			// 選ばれたとき、新しく作らずにそのタスクを進行中にするため。
-			//
-			// 除くのはモックだけ。
-			// モックは状況も指定タスクも受け取らないので、無関係な3枚目を返す。
-			// それに題名を貼ると、中身とタイトルが食い違う。
-			//
-			// フォールバックは、指定タスクをそのまま3枚目に使うようになったので
-			// 紐づけてよい。紐づけないと、選んだときに同じ題名のタスクが
-			// もう1件できてしまう。
-			if (position == 3 && pickedTask != null && !"MOCK".equals(source)) {
+			if (position == PICKED_POSITION && pickedTask != null && !"MOCK".equals(source)) {
 				card.setSourceTaskId(pickedTask.getId());
 				card.setTitle(pickedTask.getTitle());
 			}
-
-			cardRepository.save(card);
 			position++;
 		}
-
-		return set;
 	}
 
 	// ===== メソッド（取り出す） =====
@@ -428,10 +542,23 @@ public class ProposalService {
 	 * @throws NotFoundException セットが無いか、他人のものだったとき
 	 */
 	public List<ProposalCard> findCards(Long setId) {
+		return findCards(findSet(setId));
+	}
 
-		findSet(setId);
-
-		return cardRepository.findByProposalSetIdOrderByPositionAsc(setId);
+	/**
+	 * 所有者を確認ずみのセットから、3枚のカードを取り出す。
+	 *
+	 * すでに findSet を通ったセットを持っているときに使う。
+	 * ID から引き直すと、同じ確認をもう一度することになる。
+	 *
+	 * 引数がセットそのものなので、確認を飛ばして呼ぶことはできない。
+	 * ProposalSet を手に入れる方法が findSet しかないため。
+	 *
+	 * @param set 所有者を確認ずみのセット
+	 * @return 1番目から順に並んだカード
+	 */
+	public List<ProposalCard> findCards(ProposalSet set) {
+		return cardRepository.findByProposalSetIdOrderByPositionAsc(set.getId());
 	}
 
 	/**
@@ -468,6 +595,12 @@ public class ProposalService {
 	/**
 	 * カードを1つ選んだとき。タスクを作り、セットを決定済みにする。
 	 *
+	 * ここは @Transactional を残している。
+	 * 外部への通信が無く、カードとタスクとセットの3つを同時に動かすため。
+	 * 途中で失敗したときに、タスクだけができて印が付いていない状態を作らない。
+	 *
+	 * controller から直接呼ばれるので、アノテーションはきちんと効く。
+	 *
 	 * 選ばれなかった2枚も消さずに残す。
 	 * 「何を出して、何が選ばれなかったか」が、提案の質を測る材料になるため。
 	 *
@@ -500,18 +633,20 @@ public class ProposalService {
 		}
 
 		// 印と、できたタスクのIDを、まとめて1回で保存する
-		cardRepository.save(card);
+		proposalStore.saveCard(card);
 
 		// セットを決定済みにする。decidedAt が迷い時間の計算に使われる
-		set.setStatus(ProposalStatus.CHOSEN);
-		set.setDecidedAt(LocalDateTime.now());
-		setRepository.save(set);
+		proposalStore.close(set, ProposalStatus.CHOSEN);
 
-		printHesitation(set);
+		logHesitation(set);
 	}
 
 	/**
 	 * 「別の案を見る」を押したとき。いまのセットを閉じて、新しく作り直す。
+	 *
+	 * @Transactional は付けない。
+	 * 新しい3案を作る側で AI を呼ぶので、付けるとその待ち時間ぶん接続を握る。
+	 * 閉じる処理だけが ProposalStore を通って、短く握る。
 	 *
 	 * 閉じたセットも記録として残す。
 	 * 何が選ばれなかったかは、提案を良くするための手がかりになる。
@@ -526,19 +661,16 @@ public class ProposalService {
 	 * @return 新しく用意したセット
 	 * @throws NotFoundException セットが無いか、他人のものだったとき
 	 */
-	@Transactional
 	public ProposalSet retopic(Long setId) {
 
 		ProposalSet set = findSet(setId);
 
-		// findCards は中で findSet を通るので、ここでも所有者は確かめられている
-		List<ProposalCard> shown = findCards(setId);
+		// 確認ずみのセットをそのまま渡す。ID から引き直さないので、所有者の確認は1回で済む
+		List<ProposalCard> shown = findCards(set);
 
-		set.setStatus(ProposalStatus.RETOPIC);
-		set.setDecidedAt(LocalDateTime.now());
-		setRepository.save(set);
+		proposalStore.close(set, ProposalStatus.RETOPIC);
 
-		printHesitation(set);
+		logHesitation(set);
 
 		return generateSet(shown);
 	}
@@ -564,6 +696,9 @@ public class ProposalService {
 	 * 楽そうなものばかり出て誰も動かない形になりうる。
 	 * このアプリの目的は選ばせることではなく、動けること。
 	 *
+	 * 結果は debug で出す。提案の中身を追うときだけ見たいもので、
+	 * 毎回の操作で出し続けると他のログが埋もれる。
+	 *
 	 * @param user いまの利用者
 	 * @return 分野ごとの重み。記録が無い分野は入らない
 	 */
@@ -584,22 +719,26 @@ public class ProposalService {
 			bonus.put(category, (done + 1) / (shown + BONUS_DENOMINATOR));
 		}
 
-		System.out.println("### 分野の重み " + bonus);
+		log.debug("分野の重み {}", bonus);
 
 		return bonus;
 	}
 
 	/**
-	 * 迷い時間をコンソールに出す。
+	 * 迷い時間をログに出す。
 	 *
-	 * 押してから決めるまでの秒数。
+	 * 3案が出てから決めるまでの秒数。
+	 * 押してから3案が出るまでの待ち時間は入っていない（ProposalSet を見ること）。
+	 *
 	 * 何秒からを迷いと見なすかはアプリ側では決めず、
 	 * 秒数をそのままプロンプトへ渡して解釈は AI に任せる方針。
 	 * 同じ判断を2か所に持つと、必ずどこかで食い違うため。
 	 *
+	 * こちらも debug。確かめたいときだけ出せばよい。
+	 *
 	 * @param set 決定済みのセット
 	 */
-	private void printHesitation(ProposalSet set) {
+	private void logHesitation(ProposalSet set) {
 
 		if (set.getDecidedAt() == null) {
 			return;
@@ -608,7 +747,7 @@ public class ProposalService {
 		// Duration.between は2つの時刻の差を表す。getSeconds で秒数になる
 		long seconds = Duration.between(set.getRequestedAt(), set.getDecidedAt()).getSeconds();
 
-		System.out.println("### 迷い時間 = " + seconds + "秒 / 結果 = " + set.getStatus());
+		log.debug("迷い時間 = {}秒 / 結果 = {}", seconds, set.getStatus());
 	}
 
 	/**
@@ -638,12 +777,16 @@ public class ProposalService {
 	 * 　OLD  … 登録の古い順（残っているものから）
 	 * 未回答のときはくじ引き。
 	 *
-	 * 締切や見積りが入っていないタスクは後ろに回している。
+	 * 締切や見積り、登録日時が入っていないタスクは後ろに回している。
 	 * 未設定を先頭に置くと、書き忘れただけのものが毎回出てしまう。
 	 *
 	 * 1件も無ければ null を返す。
 	 * 呼び出し側は null のときプロンプトの欄ごと出さないので、
 	 * ここで空のリストを返す形にはしていない。
+	 *
+	 * 文字列をそのまま書いているのは、この値を読むのがここだけのため。
+	 * 分野の名前（Categories）は3つのクラスに散っていたのでまとめたが、
+	 * こちらは1か所しかないので、定数にしても探す手間は減らない。
 	 *
 	 * @param tasks     未完了のタスク
 	 * @param orderPref すすめ方の好み。未回答なら null
@@ -664,7 +807,8 @@ public class ProposalService {
 			case "DUE" -> Comparator.comparing(Task::getDueDate,
 					Comparator.nullsLast(Comparator.naturalOrder()));
 
-			case "OLD" -> Comparator.comparing(Task::getCreatedAt);
+			case "OLD" -> Comparator.comparing(Task::getCreatedAt,
+					Comparator.nullsLast(Comparator.naturalOrder()));
 
 			// 未回答。くじ引きにする
 			default -> null;
@@ -672,8 +816,12 @@ public class ProposalService {
 
 		if (order == null) {
 			// nextInt(n) は 0 以上 n 未満の整数を返す。
-			// リストの番号は0から始まるので、そのまま添字に使える
-			return tasks.get(random.nextInt(tasks.size()));
+			// リストの番号は0から始まるので、そのまま添字に使える。
+			//
+			// ThreadLocalRandom.current() は、いま動いているスレッド用のくじ引きを返す。
+			// このクラスは1つだけ作られて使い回されるので、
+			// Random を1つ持つと、同時に使う人数ぶんの取り合いになる
+			return tasks.get(ThreadLocalRandom.current().nextInt(tasks.size()));
 		}
 
 		return tasks.stream().min(order).orElse(null);

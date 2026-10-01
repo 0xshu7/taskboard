@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import com.example.taskboard.domain.Task;
+import com.example.taskboard.logic.Categories;
 import com.example.taskboard.logic.Situation;
 
 /**
@@ -23,6 +24,15 @@ import com.example.taskboard.logic.Situation;
  *  2行目 … このタスクの中心（ここが終われば「やった」と言える）
  *  3行目 … ついでにできること（できなくてもOK）
  *  おわりの目安 … 2行目が終わる時点。
+ *
+ * 【分野の名前は書かない】
+ *
+ * 「べんきょう」などの文字を直に書くと、言い換えたいときに
+ * ここと SituationJudge と FallbackCards の3か所を探すことになる。
+ * Categories が持っているものを使う。
+ *
+ * 出力の決まりに並べる一覧も、同じところから組み立てている。
+ * 文章の中に書き写すと、増やしたときに古い3つが残る。
  */
 @Component
 public class PromptBuilder {
@@ -166,8 +176,14 @@ public class PromptBuilder {
 		p.append("【出力】\n");
 		p.append("cards という配列に3件。1つ目・2つ目・3つ目は上の順に並べる。\n");
 		p.append("各件は次の項目を持つ。\n");
-		p.append("title（30字以内）／category（べんきょう・せいかつ・リラックス のいずれか。");
+
+		// 分野の一覧は Categories から組み立てる。
+		// 文章の中に書き写すと、分野を増やしたときに古い3つが残る
+		p.append("title（30字以内）／category（");
+		p.append(String.join("・", Categories.ALL));
+		p.append(" のいずれか。");
 		p.append("1つ目と2つ目は上で指定したものをそのまま入れる）／\n");
+
 		p.append("granularity（FIVE_MIN・TODAY・GROUP）／difficulty（LOW・MID・HIGH）／\n");
 		p.append("estimatedMinutes（整数）／reason（40字以内）／detail（上の書き方）\n");
 		p.append("出力はJSONだけ。説明文・コードフェンス禁止。\n");
@@ -177,6 +193,13 @@ public class PromptBuilder {
 
 	/**
 	 * その時間帯・その分野に使う前置きを1つ返す。
+	 *
+	 * 分野の名前は Categories の定数を使っている。
+	 * final で中身が文字そのものなので、switch の case にそのまま書ける。
+	 *
+	 * @param timeOfDay 朝・昼・夜・深夜
+	 * @param category  分野
+	 * @return title の前置き
 	 */
 	public static String wordsFor(String timeOfDay, String category) {
 
@@ -184,30 +207,30 @@ public class PromptBuilder {
 
 			// 立ち上げ・スイッチオン
 			case "朝" -> switch (category) {
-				case "べんきょう" -> "朝の集中力アップに";
-				case "せいかつ"   -> "出かける前にサクッと";
-				default           -> "気持ちよく1日を始めるために";
+				case Categories.STUDY -> "朝の集中力アップに";
+				case Categories.LIFE  -> "出かける前にサクッと";
+				default               -> "気持ちよく1日を始めるために";
 			};
 
 			// 仕切り直し・リフレッシュ
 			case "昼" -> switch (category) {
-				case "べんきょう" -> "午後の集中力アップに";
-				case "せいかつ"   -> "食後にサクッと";
-				default           -> "午後のリフレッシュに";
+				case Categories.STUDY -> "午後の集中力アップに";
+				case Categories.LIFE  -> "食後にサクッと";
+				default               -> "午後のリフレッシュに";
 			};
 
 			// アクティブ・集中・自分の時間
 			case "夜" -> switch (category) {
-				case "べんきょう" -> "夜の集中タイムに";
-				case "せいかつ"   -> "寝る前のひと整えに";
-				default           -> "夜のリフレッシュに";
+				case Categories.STUDY -> "夜の集中タイムに";
+				case Categories.LIFE  -> "寝る前のひと整えに";
+				default               -> "夜のリフレッシュに";
 			};
 
 			// レビュー・労い・ログ
 			default -> switch (category) {
-				case "べんきょう" -> "明日の自分をラクにするために";
-				case "せいかつ"   -> "今日のおしまいに";
-				default           -> "寝る前のリラックスに";
+				case Categories.STUDY -> "明日の自分をラクにするために";
+				case Categories.LIFE  -> "今日のおしまいに";
+				default               -> "寝る前のリラックスに";
 			};
 		};
 	}
