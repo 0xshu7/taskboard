@@ -137,7 +137,7 @@ public class PromptBuilder {
 
 		p.append("3つ目：上に指定したタスクです。title は一字も変えずにそのまま使い、\n");
 		p.append("    detail（完了のヒント）だけを書いてください。\n");
-		p.append("    estimatedMinutes と difficulty は、その内容から見積もってください。\n");
+		p.append("    estimatedMinutes と difficulty は書かなくてかまいません。\n");
 		p.append("    「（なし）」のときは、3つ目も新しい案にしてください。\n\n");
 
 		p.append("分野・前置き・分数は決まっています。変えないでください。\n\n");

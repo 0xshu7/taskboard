@@ -23,6 +23,8 @@ package com.example.taskboard.service;
 // FallbackCards          … AIが失敗したときに出す、決まった3案
 // PromptBuilder          … AIに送る文章を組み立てる
 // ProposalGenerator      … 3案を作る係。モックと本物を差し替えられる
+// Difficulty             … 難易度
+// Granularity            … タスクの粒度
 // ProposalCard           … 提案カード1枚
 // ProposalSet            … 提案1セット
 // ProposalStatus         … セットの状態
@@ -50,6 +52,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.taskboard.ai.FallbackCards;
 import com.example.taskboard.ai.PromptBuilder;
 import com.example.taskboard.ai.ProposalGenerator;
+import com.example.taskboard.domain.Difficulty;
+import com.example.taskboard.domain.Granularity;
 import com.example.taskboard.domain.ProposalCard;
 import com.example.taskboard.domain.ProposalSet;
 import com.example.taskboard.domain.ProposalStatus;
@@ -221,6 +225,12 @@ public class ProposalService {
 	 * その場合は全期間を数える。
 	 */
 	private static final LocalDateTime EPOCH = LocalDateTime.of(2000, 1, 1, 0, 0);
+
+	/** 1枚目のカードに振られる番号 */
+	private static final int FIRST_POSITION = 1;
+
+	/** 2枚目のカードに振られる番号 */
+	private static final int SECOND_POSITION = 2;
 
 	/** 3枚目のカードに振られる番号 */
 	private static final int PICKED_POSITION = 3;
@@ -460,12 +470,20 @@ public class ProposalService {
 	}
 
 	/**
-	 * 3枚のカードに番号を振る。まだ保存はしない。
+	 * 3枚のカードに番号を振り、重さを入れる。まだ保存はしない。
 	 *
 	 * 番号が表示順であり、同時に重さの役割も表す。
 	 *
+	 * 粒度と難易度は、AI の答えを使わずにここで入れ直す。
+	 * 分数はプロンプトで枠を指定しているが、粒度と難易度は指定していないので、
+	 * 3〜10分の案に「まとまった時間が要る」や HIGH が付くことがある。
+	 * 画面には分野・難易度・目安時間が並ぶので、ここが食い違うと選ぶ手がかりにならない。
+	 *
 	 * 3枚目だけ、元になったタスクを覚えておく。
 	 * 選ばれたとき、新しく作らずにそのタスクを進行中にするため。
+	 * 題名に続いて難易度と目安時間も元の値を入れる。
+	 * 本人が付けた値が、選んだあとのタスクにそのまま残るようにするため。
+	 * 入っていない項目は、AI の値をそのまま残す。
 	 *
 	 * 除くのはモックだけ。
 	 * モックは状況も指定タスクも受け取らないので、無関係な3枚目を返す。
@@ -481,14 +499,32 @@ public class ProposalService {
 	 */
 	private void numberCards(List<ProposalCard> cards, Task pickedTask, String source) {
 
-		int position = 1;
+		int position = FIRST_POSITION;
 
 		for (ProposalCard card : cards) {
 			card.setPosition(position);
 
+			// 1枚目はすぐ終わる軽いもの、2枚目は今日中に終わるもの
+			if (position == FIRST_POSITION) {
+				card.setGranularity(Granularity.FIVE_MIN);
+				card.setDifficulty(Difficulty.LOW);
+
+			} else if (position == SECOND_POSITION) {
+				card.setGranularity(Granularity.TODAY);
+				card.setDifficulty(Difficulty.MID);
+			}
+
 			if (position == PICKED_POSITION && pickedTask != null && !"MOCK".equals(source)) {
 				card.setSourceTaskId(pickedTask.getId());
 				card.setTitle(pickedTask.getTitle());
+				card.setGranularity(Granularity.TODAY);
+
+				if (pickedTask.getDifficulty() != null) {
+					card.setDifficulty(pickedTask.getDifficulty());
+				}
+				if (pickedTask.getEstimatedMinutes() != null) {
+					card.setEstimatedMinutes(pickedTask.getEstimatedMinutes());
+				}
 			}
 			position++;
 		}
@@ -691,7 +727,7 @@ public class ProposalService {
 	 * 答えなおすと起点が動くので、そこで評価もやりなおる。
 	 * 記録そのものは消さないので、集計や振り返りには残る。
 	 *
-	 * 選ばれた数ではなく、終わった数を見ている。
+	 * 選ばれただけでは上がらず、終わって初めて上がる。
 	 * 選択だけを報酬にすると、選びやすいだけの提案に寄ってしまい、
 	 * 楽そうなものばかり出て誰も動かない形になりうる。
 	 * このアプリの目的は選ばせることではなく、動けること。
