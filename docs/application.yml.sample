@@ -1,0 +1,56 @@
+# application.yml のひな形
+#
+# 実際のファイルは src/main/resources/application.yml です。
+# 秘密にあたる値はすべて環境変数から読んでいるので、
+# このファイルにも、実物のファイルにも、鍵やパスワードは書かれていません。
+#
+# ${NAME:} の書き方は「環境変数 NAME を読む。無ければ空」という意味です。
+
+spring:
+  application:
+    name: taskboard
+
+  # dev … H2（開発用）／ prod … MySQL
+  profiles:
+    active: prod
+
+  h2:
+    console:
+      enabled: false
+
+  jpa:
+    open-in-view: false
+
+  web:
+    error:
+      include-stacktrace: never
+      include-message: never
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            # 名前もメールアドレスも要求しない
+            scope: openid
+
+ai:
+  # true にすると Gemini を呼ばず、固定の3案を返す
+  mock: false
+  model: gemini-3.6-flash
+  api-key: ${GEMINI_API_KEY:}
+  timeout-seconds: 10
+  max-attempts: 3
+
+app:
+  base-url: http://localhost:8080
+  # 「やっちゃう」の待ち時間を割る数。1 がそのままの分数。
+  # 動作確認で待ち時間を縮めたいときだけ大きくする
+  auto-complete-divisor: 1
+
+push:
+  public-key: ${VAPID_PUBLIC_KEY:}
+  private-key: ${VAPID_PRIVATE_KEY:}
+  subject: mailto:noreply@example.com

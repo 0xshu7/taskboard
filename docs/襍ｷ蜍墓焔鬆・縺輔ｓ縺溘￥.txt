@@ -1,0 +1,137 @@
+===================================================================
+ さんたく（taskboard） 起動手順
+ 2026年10月2日 / 野口
+===================================================================
+
+0. これは何か
+-------------------------------------------------------------------
+AI が3つのタスクを提案し、選ぶだけで実行できるタスク管理アプリです。
+Spring Boot の単体で動きます。ビルド済みの実行ファイルは含みません。
+ソースから起動してください。
+
+
+1. 必要なもの
+-------------------------------------------------------------------
+  Java          21
+  Maven         3.9 以降（Eclipse 同梱のものでよい）
+  MySQL         8 以降         ※ 本番プロファイル（prod）で使う
+  ブラウザ      Google Chrome  ※ 通知と Service Worker のため
+  ネットワーク  Gemini API と Google ログインに接続できること
+
+  ※ MySQL を用意できない場合は、手順 4 の dev プロファイルで
+    起動してください。H2（ファイル）で動き、MySQL は要りません。
+
+
+2. 環境変数を設定する
+-------------------------------------------------------------------
+docs/env.sample.txt を見て、次の値を設定します。
+
+  GEMINI_API_KEY        Gemini のキー
+  GOOGLE_CLIENT_ID      Googleログイン
+  GOOGLE_CLIENT_SECRET  Googleログイン
+  VAPID_PUBLIC_KEY      Web Push の公開鍵
+  VAPID_PRIVATE_KEY     Web Push の秘密鍵
+  DB_PASSWORD           MySQL のパスワード（prod のときだけ）
+
+Eclipse の場合
+  実行構成 → Environment タブ → New で1つずつ追加します。
+  「Spring Boot App」と「Maven Build」は別の実行構成なので、
+  テストも走らせるなら両方に登録してください。
+
+コマンドの場合（Windows / PowerShell）
+  $env:GEMINI_API_KEY="..."
+  （以下同じ）
+
+
+3. データベースを用意する（prod で動かす場合）
+-------------------------------------------------------------------
+MySQL に接続して、次を実行します。
+
+  CREATE DATABASE taskboard
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_0900_ai_ci;
+
+  CREATE USER 'taskboard'@'localhost' IDENTIFIED BY '<パスワード>';
+  GRANT ALL PRIVILEGES ON taskboard.* TO 'taskboard'@'localhost';
+  FLUSH PRIVILEGES;
+
+ここで決めたパスワードを、環境変数 DB_PASSWORD に入れます。
+
+表は起動時に自動で作られます（ddl-auto: update）。
+手で作りたい場合は docs/schema_mysql.sql を流してください。
+初期データは要りません。
+
+
+4. 起動する
+-------------------------------------------------------------------
+■ 本番プロファイル（MySQL）
+  何も指定せずに起動します。application.yml が prod になっています。
+
+    mvn spring-boot:run
+
+  Eclipse の場合は TaskboardApplication を
+  「実行 → Spring Boot アプリケーション」で起動します。
+
+■ 開発プロファイル（H2。MySQL が無くても動く）
+  VM 引数に次を足します。
+
+    -Dspring.profiles.active=dev
+
+  コマンドの場合
+
+    mvn spring-boot:run -Dspring-boot.run.profiles=dev
+
+  データは ./data/taskboard.mv.db というファイルに入ります。
+  H2 のコンソールは http://localhost:8080/h2 で開きます
+  （URL は jdbc:h2:file:./data/taskboard、ユーザー sa、パスワード空）。
+
+■ Gemini を呼ばずに動かす
+  application.yml の ai.mock を true にすると、
+  キーが無くても固定の3案で画面が一通り動きます。
+
+
+5. 使ってみる
+-------------------------------------------------------------------
+  1) ブラウザで http://localhost:8080 を開く
+  2) 「Googleでログイン」を押す
+  3) 3つの質問に答える（1画面1問、3択）
+  4) スタートを押す。3〜5秒で3案が出る
+  5) 1つ選ぶと、タスク一覧に入る
+  6) 設定画面で通知を入にすると、毎朝8時に声かけが届く
+
+通知について
+  ブラウザの通知の許可が必要です。
+  許可を間違えて拒否した場合は、アドレスバー左の鍵マークから
+  通知の設定を「許可」に戻してください。
+
+
+6. 止める
+-------------------------------------------------------------------
+  コンソールで Ctrl + C。
+  Eclipse の場合はコンソールビューの赤い停止ボタン。
+
+
+7. よくあるつまずき
+-------------------------------------------------------------------
+  Incorrect length for uncompressed encoding
+    VAPID の鍵が欠けています。Ctrl+A で全選択して入れ直してください。
+
+  ERROR 1045 (28000) Access denied for user 'taskboard'
+    DB_PASSWORD が違うか、設定されていません。
+
+  スタートを押すと3案が出るが source が FALLBACK
+    Gemini のキーが違うか、無料枠の上限に達しています。
+    コンソールに warn が出ているので、そこに理由が出ます。
+
+  画面は出るがログインできない
+    Google Cloud Console のリダイレクト URI を確認してください。
+      http://localhost:8080/login/oauth2/code/google
+
+
+8. 同梱しているもの
+-------------------------------------------------------------------
+  docs/schema_mysql.sql        DB定義 SQL
+  docs/dependencies.md         依存ライブラリの一覧
+  docs/application.yml.sample  設定ファイルのひな形
+  docs/env.sample.txt          環境変数のひな形
+  docs/起動手順_さんたく.txt   このファイル
