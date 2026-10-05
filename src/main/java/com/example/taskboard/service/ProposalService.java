@@ -235,6 +235,19 @@ public class ProposalService {
 	/** 3枚目のカードに振られる番号 */
 	private static final int PICKED_POSITION = 3;
 
+	/**
+	 * 3件目を「まとまった時間が要る」と見なす分数。
+	 *
+	 * 3件目は、手が止まっているタスクを進めるためのもの。
+	 * 一度では終わらないものが多いので GROUP を入れるが、
+	 * 本人が短い時間を見積もっているタスクまでそう呼ぶと、
+	 * 画面に「5分」と「まとまった時間が要る」が並んで食い違う。
+	 *
+	 * 分数が入っていないときは GROUP にする。
+	 * 見積もっていないタスクは、終わりが見えていないことが多いため。
+	 */
+	private static final int GROUP_MINUTES = 30;
+
 	/** 提案セットの出し入れ。所有者を確かめる findSet だけが使う */
 	private final ProposalSetRepository setRepository;
 
@@ -482,6 +495,7 @@ public class ProposalService {
 	 * 3枚目だけ、元になったタスクを覚えておく。
 	 * 選ばれたとき、新しく作らずにそのタスクを進行中にするため。
 	 * 題名に続いて難易度と目安時間も元の値を入れる。
+	 * 粒度は、その目安時間から決める（granularityOf）。
 	 * 本人が付けた値が、選んだあとのタスクにそのまま残るようにするため。
 	 * 入っていない項目は、AI の値をそのまま残す。
 	 *
@@ -517,7 +531,6 @@ public class ProposalService {
 			if (position == PICKED_POSITION && pickedTask != null && !"MOCK".equals(source)) {
 				card.setSourceTaskId(pickedTask.getId());
 				card.setTitle(pickedTask.getTitle());
-				card.setGranularity(Granularity.TODAY);
 
 				if (pickedTask.getDifficulty() != null) {
 					card.setDifficulty(pickedTask.getDifficulty());
@@ -525,9 +538,30 @@ public class ProposalService {
 				if (pickedTask.getEstimatedMinutes() != null) {
 					card.setEstimatedMinutes(pickedTask.getEstimatedMinutes());
 				}
+
+				// 分数を入れ替えたあとで決める。
+				// 元のタスクに見積もりが無ければ、AI が付けた分数がそのまま残るため
+				card.setGranularity(granularityOf(card.getEstimatedMinutes()));
 			}
 			position++;
 		}
+	}
+
+	/**
+	 * 3件目の粒度を、カードに入っている分数から決める。
+	 *
+	 * 1件目と2件目は決め打ちだが、3件目は元のタスクを進めるものなので、
+	 * その見積もりに合わせる。粒度と分数が食い違うと、選ぶ手がかりにならない。
+	 *
+	 * @param minutes カードの目安時間。入っていないこともある
+	 * @return 30分以上か、分からなければ GROUP。それより短ければ TODAY
+	 */
+	private Granularity granularityOf(Integer minutes) {
+
+		if (minutes == null || minutes >= GROUP_MINUTES) {
+			return Granularity.GROUP;
+		}
+		return Granularity.TODAY;
 	}
 
 	// ===== メソッド（取り出す） =====
