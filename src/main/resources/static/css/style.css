@@ -112,9 +112,11 @@ body {
   line-height: 1.6;
 }
 
-/* アプリ全体を1枚の白いカードにする */
+/* アプリ全体を1枚の白いカードにする。
+   タスク一覧は1行に題名・締切・難易度・編集・削除が並ぶので、
+   題名の文字を小さくせずに済むよう、横幅のほうを広げてある */
 .container {
-  max-width: 720px;
+  max-width: 820px;
   margin: 0 auto;
   background: var(--card);
   border: 3px solid var(--ink);
@@ -603,19 +605,21 @@ body {
   color: var(--muted);
 }
 
-/* 締切。未設定でも場所を空けて、難易度バッジの位置をそろえる */
+/* 締切。未設定でも場所を空けて、難易度バッジの位置をそろえる。
+   超過のときは枠が付いて横に広がるので、その幅に合わせてある。
+   揃えていないと、締切が過ぎた日に ▾ の位置だけ動いて見える */
 .due {
-  min-width: 56px;
+  min-width: 92px;
   text-align: right;
   font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
 }
 
-/* 締切超過。難易度バッジと同じ形にして、ピンクで強く出す */
+/* 締切超過。難易度バッジと同じ形にして、ピンクで強く出す。
+   幅は .due のまま変えない。打ち消すと、超過した行だけ横幅が変わる */
 .due-over {
-  min-width: auto;           /* .due の幅指定を打ち消す */
-  padding: 4px 12px;
+  padding: 4px 8px;
   border: 3px solid var(--ink);
   border-radius: var(--pill);
   background: var(--pink);
@@ -623,6 +627,15 @@ body {
   font-size: 13px;
   font-weight: 800;
   text-align: center;
+}
+
+/* 画面が狭いときは、締切の幅の確保をやめる。
+   92px は ▾ の位置をそろえるための幅なので、
+   1行に収まらない幅では、題名に回したほうがよい */
+@media (max-width: 720px) {
+  .due {
+    min-width: auto;
+  }
 }
 
 /* 難易度バッジ */

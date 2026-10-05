@@ -1,6 +1,6 @@
 ===================================================================
  さんたく（taskboard） 起動手順
- 2026年10月2日 / 野口
+ 2026年10月5日 / 野口
 ===================================================================
 
 0. これは何か
@@ -57,9 +57,24 @@ MySQL に接続して、次を実行します。
 
 ここで決めたパスワードを、環境変数 DB_PASSWORD に入れます。
 
-表は起動時に自動で作られます（ddl-auto: update）。
-手で作りたい場合は docs/schema_mysql.sql を流してください。
+表は docs/schema_mysql.sql を流して作ってください。
+
+  mysql -u taskboard -p taskboard < docs/schema_mysql.sql
+
+本番プロファイルは ddl-auto: validate で動きます。
+起動時に、表の形がエンティティと合っているかを確かめるだけで、
+表を作ったり変えたりはしません。
+表が無い状態で起動すると、その場で止まります。
+
+外部キーを6本張っています。消したときの振る舞いは3通りです。
+  利用者を指す参照        … RESTRICT（タスクが残っている利用者は消せない）
+  セットとカードの参照    … CASCADE （セットを消すとカードも消える）
+  カードからタスクの参照  … SET NULL（タスクを消しても出した記録は残る）
+
 初期データは要りません。
+
+開発プロファイル（H2）は ddl-auto: update なので、
+手順4で dev を選ぶ場合、この手順は要りません。
 
 
 4. 起動する
@@ -81,9 +96,20 @@ MySQL に接続して、次を実行します。
 
     mvn spring-boot:run -Dspring-boot.run.profiles=dev
 
+  表は起動時に自動で作られます（ddl-auto: update）。
   データは ./data/taskboard.mv.db というファイルに入ります。
   H2 のコンソールは http://localhost:8080/h2 で開きます
   （URL は jdbc:h2:file:./data/taskboard、ユーザー sa、パスワード空）。
+
+■ 自動テストを走らせる
+  mvn test で27件動きます。
+
+    mvn test
+
+  このうち26件はメモリ上のH2か、データベースを使わないものなので、
+  MySQL が無くても動きます。
+  残る1件（TaskboardApplicationTests）はアプリ全体を起動する確認なので、
+  MySQL と環境変数がそろっている必要があります。
 
 ■ Gemini を呼ばずに動かす
   application.yml の ai.mock を true にすると、
@@ -119,6 +145,12 @@ MySQL に接続して、次を実行します。
   ERROR 1045 (28000) Access denied for user 'taskboard'
     DB_PASSWORD が違うか、設定されていません。
 
+  Schema-validation: missing table [tasks]
+    表がまだありません。手順3の schema_mysql.sql を流してください。
+
+  Unable to determine Dialect without JDBC metadata
+    MySQL につながっていません。サービスが動いているか確かめてください。
+
   スタートを押すと3案が出るが source が FALLBACK
     Gemini のキーが違うか、無料枠の上限に達しています。
     コンソールに warn が出ているので、そこに理由が出ます。
@@ -134,4 +166,4 @@ MySQL に接続して、次を実行します。
   docs/dependencies.md         依存ライブラリの一覧
   docs/application.yml.sample  設定ファイルのひな形
   docs/env.sample.txt          環境変数のひな形
-  docs/起動手順_さんたく.txt   このファイル
+  docs/startup_guide.txt       このファイル

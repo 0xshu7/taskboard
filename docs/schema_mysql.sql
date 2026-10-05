@@ -1,13 +1,22 @@
 -- さんたく（taskboard） DB定義 / MySQL 8 以降
 --
 -- このファイルの内容は、JPA のエンティティ定義（domain パッケージ）と同じものです。
--- アプリは spring.jpa.hibernate.ddl-auto=update で起動時に表を作るため、
--- 通常はこのファイルを流す必要はありません。
--- 空のデータベースに手で作る場合、または表の定義を確認する場合に使ってください。
 --
--- 外部キー制約は張っていません。
--- エンティティを @ManyToOne で結ばず、user_id などを数値の列として持つ作りにしているためです。
--- 持ち主の確認は、アプリ側（TaskService.findById / ProposalService.findSet）で行っています。
+-- 本番プロファイル（prod）は spring.jpa.hibernate.ddl-auto=validate で動きます。
+-- 起動時に、表の形がエンティティと合っているかを確かめるだけで、表は作りません。
+-- そのため、空のデータベースに対しては、先にこのファイルを流す必要があります。
+--
+-- 開発プロファイル（dev）の H2 は ddl-auto=update なので、流さなくても動きます。
+--
+-- 外部キー制約を張っています（2026年10月）。
+-- エンティティは @ManyToOne で結ばず、user_id などを数値の列として持つ作りのままです。
+-- アプリ側（TaskService.findById / ProposalService.findSet）の持ち主の確認に加えて、
+-- データベース側でも、行き先の無い参照が入らないようにしています。
+--
+-- 消したときの振る舞いは、参照の意味に合わせて3通りに分けています。
+--   RESTRICT … 利用者を指す参照。タスクや提案が残っている利用者は消せない
+--   CASCADE  … セットとカードの参照。セットを消せばカードも一緒に消える
+--   SET NULL … カードからタスクを指す参照。タスクを消しても「出した記録」は残す
 
 CREATE DATABASE IF NOT EXISTS taskboard
   DEFAULT CHARACTER SET utf8mb4
@@ -49,7 +58,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at        DATETIME     NOT NULL,
   completed_at      DATETIME     NULL,
   auto_complete_at  DATETIME     NULL,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  KEY idx_tasks_user (user_id),
+  CONSTRAINT fk_tasks_user FOREIGN KEY (user_id) REFERENCES users (id)
+    ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------
@@ -65,7 +77,10 @@ CREATE TABLE IF NOT EXISTS proposal_sets (
   source       VARCHAR(20)   NULL,
   status       VARCHAR(10)   NOT NULL,
   prompt_text  VARCHAR(5000) NULL,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  KEY idx_proposal_sets_user (user_id),
+  CONSTRAINT fk_proposal_sets_user FOREIGN KEY (user_id) REFERENCES users (id)
+    ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------
@@ -85,7 +100,16 @@ CREATE TABLE IF NOT EXISTS proposal_cards (
   chosen            BIT(1)       NOT NULL,
   source_task_id    BIGINT       NULL,
   result_task_id    BIGINT       NULL,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  KEY idx_proposal_cards_set (proposal_set_id),
+  KEY idx_proposal_cards_source_task (source_task_id),
+  KEY idx_proposal_cards_result_task (result_task_id),
+  CONSTRAINT fk_proposal_cards_set FOREIGN KEY (proposal_set_id) REFERENCES proposal_sets (id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_proposal_cards_source_task FOREIGN KEY (source_task_id) REFERENCES tasks (id)
+    ON DELETE SET NULL,
+  CONSTRAINT fk_proposal_cards_result_task FOREIGN KEY (result_task_id) REFERENCES tasks (id)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------
@@ -99,7 +123,10 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   auth       VARCHAR(255) NOT NULL,
   created_at DATETIME     NOT NULL,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_push_endpoint (endpoint)
+  UNIQUE KEY uk_push_endpoint (endpoint),
+  KEY idx_push_subscriptions_user (user_id),
+  CONSTRAINT fk_push_subscriptions_user FOREIGN KEY (user_id) REFERENCES users (id)
+    ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------

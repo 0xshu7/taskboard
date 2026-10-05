@@ -64,8 +64,10 @@
 
 			<div class="field">
 				<label th:for="'detail-text-' + ${task.id}">完了のヒント</label>
+				<!-- maxlength は Task.detail の列の長さと同じ300。
+				     これを外して送られたときは TaskController が止める -->
 				<textarea th:id="'detail-text-' + ${task.id}" name="detail"
-				          rows="5" th:text="${task.detail}"></textarea>
+				          rows="5" maxlength="300" th:text="${task.detail}"></textarea>
 			</div>
 
 			<div class="edit-actions">

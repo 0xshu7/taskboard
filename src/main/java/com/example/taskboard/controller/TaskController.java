@@ -80,6 +80,9 @@ public class TaskController {
 	 */
 	private static final int TITLE_MAX = 100;
 
+	/** 完了のヒントの長さの上限。Task の列の長さと同じ値にしてある */
+	private static final int DETAIL_MAX = 300;
+
 	/** タスクの処理 */
 	private final TaskService taskService;
 
@@ -189,7 +192,7 @@ public class TaskController {
 			return "redirect:/tasks?error=duePast";
 		}
 
-		if (tooLong(title)) {
+		if (tooLong(title, TITLE_MAX)) {
 			return "redirect:/tasks?error=titleLong";
 		}
 
@@ -228,8 +231,15 @@ public class TaskController {
 			return "redirect:/tasks";
 		}
 
-		if (tooLong(title)) {
+		if (tooLong(title, TITLE_MAX)) {
 			return "redirect:/tasks?error=titleLong";
+		}
+
+		// 完了のヒントも長さを見る。
+		// Task.setDetail が300文字で切り詰めるので保存は通るが、
+		// 本人には何も伝わらないまま文章が切れることになる
+		if (tooLong(detail, DETAIL_MAX)) {
+			return "redirect:/tasks?error=detailLong";
 		}
 
 		taskService.update(id, title, difficulty, dueDate, detail);
@@ -333,11 +343,12 @@ public class TaskController {
 	 * 数え方は Task の切り詰めと同じで、コードポイントで数える。
 	 * length() だと絵文字が2文字ぶんになり、片方だけ基準がずれる。
 	 *
-	 * @param text 題名
+	 * @param text 調べる文字列
+	 * @param max  上限の文字数
 	 * @return 上限を超えていれば true
 	 */
-	private boolean tooLong(String text) {
-		return text != null && text.codePointCount(0, text.length()) > TITLE_MAX;
+	private boolean tooLong(String text, int max) {
+		return text != null && text.codePointCount(0, text.length()) > max;
 	}
 
 	/**
@@ -356,10 +367,11 @@ public class TaskController {
 		}
 
 		return switch (error) {
-			case "duePast"   -> "締切に過去の日付は指定できません。";
-			case "titleLong" -> "タスクの内容は100文字までです。";
-			case "dueFormat" -> "締切の形式が正しくありません。";
-			default          -> null;
+			case "duePast"    -> "締切に過去の日付は指定できません。";
+			case "titleLong"  -> "タスクの内容は100文字までです。";
+			case "detailLong" -> "完了のヒントは300文字までです。";
+			case "dueFormat"  -> "締切の形式が正しくありません。";
+			default           -> null;
 		};
 	}
 
