@@ -1193,6 +1193,61 @@ body {
 .waiting-dots span:nth-child(3) { background: var(--cyan);  animation-delay: .4s; }
 
 /* 順番に濃くなる。時間差は animation-delay で作っている */
+/* --------------------------------------------------------------------------
+   操作が止まったときの知らせ
+
+   待機オーバーレイと同じ作りにしてある。
+   帯で出すと画面の上のほうに1行増えるだけなので、
+   入力欄を見ている人の目に入らない。
+   手が止まる知らせは、手が止まったことが分かる形で出す。
+   -------------------------------------------------------------------------- */
+
+.notice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, .45);
+}
+
+.notice-box {
+  max-width: 360px;
+  padding: 28px 24px;
+  border: 3px solid var(--ink);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.notice-text {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ボタンに見せるが、中身はリンク。
+   押すと印の付かない /tasks を開き直すので、この知らせは出なくなる */
+.btn-notice {
+  display: inline-block;
+  padding: 10px 28px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--pink);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-notice:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
 @keyframes waiting-blink {
   0%, 60%, 100% { opacity: .25; }
   30%           { opacity: 1; }

@@ -116,6 +116,33 @@ public class PushSubscriptionService {
 	}
 
 	/**
+	 * その届け先が、いまの利用者のものとして登録されているかを返す。
+	 *
+	 * 設定画面のスイッチを、端末ごとの状態に合わせるために使う。
+	 *
+	 * existsFor は利用者ごとなので、2台で使うと、片方で入にしただけで
+	 * もう片方も入に見える。サーバーは端末を見分けられないため、
+	 * 「この端末の届け先」をブラウザ側から渡してもらって照合する。
+	 *
+	 * 他人の届け先を渡されたときは false を返す。
+	 * 登録の有無を外から調べられないようにしている。
+	 *
+	 * @param endpoint ブラウザが持っている届け先
+	 * @return 自分のものとして登録されていれば true
+	 */
+	@Transactional(readOnly = true)
+	public boolean isRegistered(String endpoint) {
+
+		if (isBlank(endpoint)) {
+			return false;
+		}
+
+		return subscriptionRepository.findByEndpoint(endpoint)
+				.filter(subscription -> subscription.getUserId().equals(userService.currentId()))
+				.isPresent();
+	}
+
+	/**
 	 * 届け先を登録する。
 	 *
 	 * 同じ届け先がすでにあれば何もしない。

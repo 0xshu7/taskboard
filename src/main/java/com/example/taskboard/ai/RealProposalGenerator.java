@@ -154,6 +154,25 @@ public class RealProposalGenerator implements ProposalGenerator {
 	/** 画面に出せるカードの枚数。これを超えて返ってきても捨てる */
 	private static final int CARD_LIMIT = 3;
 
+	/**
+	 * 題名・理由・ヒントの長さの上限。
+	 *
+	 * ProposalCard の列の長さと同じ値にしてある。
+	 * これを超えたものを受け取ると、入れる側が黙って切り詰める。
+	 * 切り詰めた文は途中で終わるので、カードとして読めなくなる。
+	 *
+	 * プロンプトではもっと短く指定しているが、ここはその確認ではない。
+	 * 「保存できる形か」だけを見ている。
+	 * 指定より少し長い程度で作り直させると、無料枠を無駄に使う。
+	 */
+	private static final int TITLE_MAX = 100;
+
+	/** 理由の長さの上限。ProposalCard の列と同じ */
+	private static final int REASON_MAX = 200;
+
+	/** 完了のヒントの長さの上限。ProposalCard の列と同じ */
+	private static final int DETAIL_MAX = 300;
+
 	/** 外部へ通信する道具。待ち時間の上限を入れて作る */
 	private final RestClient rest;
 
@@ -313,6 +332,20 @@ public class RealProposalGenerator implements ProposalGenerator {
 				}
 
 				log.warn("Gemini 再試行 {}回目 (status={})", attempt, status);
+				sleep(attempt);
+
+			} catch (IllegalStateException e) {
+
+				// 返ってきた形が想定と違う。
+				// 項目が足りない、長さが上限を超えている、など。
+				//
+				// 同じ指示で呼び直すと別の文章が返る（temperature を入れてあるため）ので、
+				// 作り直させる価値がある。
+				//
+				// 回数を使い切ったら、呼び出し側が固定3案に切り替える。
+				lastError = e;
+
+				log.warn("Gemini 応答の形が不正。再試行 {}回目: {}", attempt, e.getMessage());
 				sleep(attempt);
 			}
 		}
@@ -487,6 +520,10 @@ public class RealProposalGenerator implements ProposalGenerator {
 			for (int i = 0; i < limit; i++) {
 				JsonNode node = array.get(i);
 
+				checkLength("title",  node.get("title").asString(),  TITLE_MAX,  json);
+				checkLength("reason", node.get("reason").asString(), REASON_MAX, json);
+				checkLength("detail", node.get("detail").asString(), DETAIL_MAX, json);
+
 				ProposalCard card = new ProposalCard();
 				card.setTitle(node.get("title").asString());
 				card.setCategory(node.get("category").asString());
@@ -507,5 +544,33 @@ public class RealProposalGenerator implements ProposalGenerator {
 			throw new IllegalStateException("カードが1枚もありません: " + json);
 		}
 		return cards;
+	}
+
+	/**
+	 * 保存できる長さに収まっているかを確かめる。
+	 *
+	 * 超えていたら例外を投げる。呼び出し側はこれを受けて作り直させる。
+	 *
+	 * 黙って切り詰めない理由。
+	 * 切り詰めた題名は文の途中で終わるので、何をするのか読めなくなる。
+	 * 利用者から見れば「変なカードが出た」だけで、原因が分からない。
+	 * 長いものが返るのは利用者の操作のせいではないので、
+	 * 画面にエラーを出すのではなく、裏でもう一度作らせる。
+	 *
+	 * 数えているのは文字の数で、バイト数ではない。
+	 * length() はサロゲートペア（絵文字など）を2つと数えるが、
+	 * 列の長さも同じ数え方なので、ここでは合わせてある。
+	 *
+	 * @param name  項目の名前。ログに出す
+	 * @param value 中身
+	 * @param max   上限
+	 * @param json  受け取った JSON。原因を追えるように添える
+	 */
+	private void checkLength(String name, String value, int max, String json) {
+
+		if (value != null && value.length() > max) {
+			throw new IllegalStateException(
+					name + " が長すぎます（" + value.length() + "文字 / 上限 " + max + "）: " + json);
+		}
 	}
 }

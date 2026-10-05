@@ -36,6 +36,17 @@
     <p class="message" th:if="${message}" th:text="${message}">削除しました</p>
   </div>
 
+  <!-- ===== 操作が止まったときの知らせ =====
+       画面を覆って出す。帯で出すと、追加したつもりのまま気づかずに進んでしまう。
+       「とじる」は印の付かない /tasks へのリンクなので、押すと消える。
+       JavaScript は使っていない -->
+  <div class="notice-overlay" th:if="${errorMessage}" role="alertdialog">
+    <div class="notice-box">
+      <p class="notice-text" th:text="${errorMessage}">締切に過去の日付は指定できません。</p>
+      <a class="btn-notice" th:href="@{/tasks}">とじる</a>
+    </div>
+  </div>
+
   <!-- ===== 新しいタスクを追加するフォーム ===== -->
   <form class="add-form" th:action="@{/tasks}" method="post">
 

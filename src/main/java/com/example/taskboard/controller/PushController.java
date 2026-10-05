@@ -29,6 +29,7 @@ import com.example.taskboard.service.PushSubscriptionService;
  * 扱うURLは3つ。
  *   POST /push/subscribe   … 通知を許可したとき。届け先を保存する
  *   POST /push/unsubscribe … 通知を切ったとき。届け先を消す
+ *   POST /push/status      … この端末が登録済みかを返す
  *   POST /push/test        … 届くかどうかをその場で確かめる
  *
  * どれも fetch で呼ばれるので、CSRF の合言葉をヘッダーに載せる必要がある。
@@ -93,6 +94,23 @@ public class PushController {
 	@PostMapping("/push/unsubscribe")
 	public String unsubscribe(@RequestBody PushSubscriptionForm form) {
 		return pushSubscriptionService.unsubscribe(form.getEndpoint());
+	}
+
+	/**
+	 * この端末が登録済みかを返す。設定画面を開いたときに呼ばれる。
+	 *
+	 * 届け先は端末ごとに違うので、ブラウザが持っているものを送ってもらう。
+	 * サーバーからは、どの端末からの要求かを見分けられないため。
+	 *
+	 * GET ではなく POST にしているのは、届け先を URL に載せないため。
+	 * URL は履歴やログに残る。
+	 *
+	 * @param form ブラウザが持っている届け先
+	 * @return 登録されていれば yes、そうでなければ no
+	 */
+	@PostMapping("/push/status")
+	public String status(@RequestBody PushSubscriptionForm form) {
+		return pushSubscriptionService.isRegistered(form.getEndpoint()) ? "yes" : "no";
 	}
 
 	/**

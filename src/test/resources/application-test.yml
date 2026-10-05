@@ -1,0 +1,32 @@
+# テストのときだけ使う設定。
+#
+# test プロファイルを指定したテスト（@ActiveProfiles("test")）だけが読む。
+# dev（H2のファイル）も prod（MySQL）も見ない。
+#
+# 【なぜテスト用を分けるのか】
+#
+# prod のまま走らせると、テストが本番のデータを書き換える。
+# 試すために作った行が残り、消し忘れれば次の確認の邪魔になる。
+# dev のファイルを使っても同じで、画面で見ているデータが混ざる。
+#
+# メモリ上のデータベースなので、テストが終われば跡形もなく消える。
+# 何回走らせても前の回の影響を受けない。
+#
+# 【MODE=MySQL にしている理由】
+#
+# 本番は MySQL なので、文法の違いで「テストだけ通る」状態を避ける。
+#
+# 【ddl-auto を create-drop にしている理由】
+#
+# 空のデータベースから始まるので、表を作るところからやる必要がある。
+# prod の validate（表があることを確かめるだけ）では、1つも表が無くて落ちる。
+spring:
+  datasource:
+    url: jdbc:h2:mem:taskboard-test;MODE=MySQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false

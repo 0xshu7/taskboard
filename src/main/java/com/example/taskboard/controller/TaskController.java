@@ -12,6 +12,10 @@ package com.example.taskboard.controller;
 // PathVariable   … URLの一部（/tasks/5/update の 5）を受け取る
 // PostMapping    … そのURLへ送信されたときに動くメソッドの印
 // RequestParam   … 入力欄の値を受け取る
+// ExceptionHandler … このクラスの中で起きた例外を受け止めるメソッドの印
+//
+// MethodArgumentTypeMismatchException
+//   … 画面から来た文字を引数の型に変換できなかったときの例外
 //
 // 以下はこのアプリの部品。
 // Difficulty   … 難易度
@@ -25,10 +29,12 @@ import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.example.taskboard.domain.Difficulty;
 import com.example.taskboard.dto.SettingsForm;
@@ -66,6 +72,14 @@ public class TaskController {
 
 	// ===== フィールド =====
 
+	/**
+	 * 題名の長さの上限。
+	 *
+	 * Task の列の長さと同じ値にしてある。
+	 * 画面の入力欄にも maxlength で同じ値を入れてある。
+	 */
+	private static final int TITLE_MAX = 100;
+
 	/** タスクの処理 */
 	private final TaskService taskService;
 
@@ -96,11 +110,19 @@ public class TaskController {
 	 * 今日の日付を渡しているのは、締切を過ぎたタスクを色分けするため。
 	 * 画面側では LocalDate.now() のような処理を書けないので、ここで用意する。
 	 *
+	 * error は、操作が止まったときに付けて戻ってくる印。
+	 * 文面そのものを URL に乗せず、合言葉だけを渡している。
+	 * 文面を URL に書くと、他の人が作ったリンクで好きな文を出せてしまう。
+	 *
+	 * @param error 止まった理由の合言葉。止まっていなければ null
 	 * @param model 画面へ値を渡す入れ物
 	 * @return templates/tasks.html
 	 */
 	@GetMapping("/tasks")
-	public String index(Model model) {
+	public String index(@RequestParam(required = false) String error, Model model) {
+
+		// 操作が止まったときの説明。止まらなかったときは null で、画面にも出ない
+		model.addAttribute("errorMessage", messageFor(error));
 
 		model.addAttribute("tasks", taskService.findActive());
 		model.addAttribute("doneTasks", taskService.findDone());
@@ -135,8 +157,11 @@ public class TaskController {
 	 * 画面の required で止めているが、開発者ツールで外せば送れてしまう。
 	 * 空白だけのタスクができると、消すまで一覧に残り続ける。
 	 *
-	 * エラーの表示は出さない。
+	 * タイトルについてはエラーの表示を出さない。
 	 * 画面の required で防いでいるものを、わざわざ外した人に説明する必要がない。
+	 *
+	 * 締切は違う。日付を選ぶ画面からでも、過ぎた日を選べてしまう。
+	 * 選べるのに静かに無視されると、入ったつもりで入っていない状態になる。
 	 *
 	 * @param title      タスクの内容
 	 * @param difficulty 難易度。未選択なら null
@@ -152,6 +177,20 @@ public class TaskController {
 
 		if (isBlank(title)) {
 			return "redirect:/tasks";
+		}
+
+		// 過ぎた日付を締切にして追加することはできない。
+		// 年を打ち間違えたときに、1年前の締切が静かに入るのを防ぐ。
+		//
+		// 書き換えのほうでは止めない。
+		// 締切を過ぎたタスクは「超過」として画面に出す作りなので、
+		// ここで止めると、超過したタスクの題名を直せなくなる。
+		if (dueDate != null && dueDate.isBefore(LocalDate.now())) {
+			return "redirect:/tasks?error=duePast";
+		}
+
+		if (tooLong(title)) {
+			return "redirect:/tasks?error=titleLong";
 		}
 
 		taskService.create(title, difficulty, dueDate);
@@ -187,6 +226,10 @@ public class TaskController {
 
 		if (isBlank(title)) {
 			return "redirect:/tasks";
+		}
+
+		if (tooLong(title)) {
+			return "redirect:/tasks?error=titleLong";
 		}
 
 		taskService.update(id, title, difficulty, dueDate, detail);
@@ -274,5 +317,76 @@ public class TaskController {
 	 */
 	private boolean isBlank(String text) {
 		return text == null || text.isBlank();
+	}
+
+	/**
+	 * 題名が上限を超えているかを判定する。
+	 *
+	 * 超えていたら、ここで止めて知らせる。
+	 * Task の setter は、入れる直前に同じ長さで切り詰める。
+	 * そちらは AI が作った題名を受けるときの備えとして残してある。
+	 *
+	 * 本人が打った文字を黙って切ると、入れたつもりのものが入らない。
+	 * 画面の maxlength で止まる作りにはしてあるが、
+	 * 外して送られたときにも、何が起きたかが分かるようにしておく。
+	 *
+	 * 数え方は Task の切り詰めと同じで、コードポイントで数える。
+	 * length() だと絵文字が2文字ぶんになり、片方だけ基準がずれる。
+	 *
+	 * @param text 題名
+	 * @return 上限を超えていれば true
+	 */
+	private boolean tooLong(String text) {
+		return text != null && text.codePointCount(0, text.length()) > TITLE_MAX;
+	}
+
+	/**
+	 * 合言葉を、画面に出す文に変える。
+	 *
+	 * 知らない合言葉は null にする。
+	 * URL を手で書き換えて、知らない文字を入れても何も出ない。
+	 *
+	 * @param error 止まった理由の合言葉
+	 * @return 画面に出す文。出すものが無ければ null
+	 */
+	private String messageFor(String error) {
+
+		if (error == null) {
+			return null;
+		}
+
+		return switch (error) {
+			case "duePast"   -> "締切に過去の日付は指定できません。";
+			case "titleLong" -> "タスクの内容は100文字までです。";
+			case "dueFormat" -> "締切の形式が正しくありません。";
+			default          -> null;
+		};
+	}
+
+	// ===== メソッド（例外を受け止める） =====
+
+	/**
+	 * 画面から来た値を、引数の型に変換できなかったとき。
+	 *
+	 * 締切の欄は、最初は文字入力で、触ると日付入力に変わる作りにしてある。
+	 * JavaScript が動かない状態や、開発者ツールから送ると、
+	 * 日付でない文字がそのまま届く。
+	 *
+	 * 受け止めずにいると 500 のエラー画面になる。
+	 * 壊れているのは入力であってアプリではないので、
+	 * 一覧に戻して、何を直せばよいかを伝える。
+	 *
+	 * 難易度の欄も同じ仕組みで変換しているので、
+	 * 知らない値が来たときはここに入る。どちらも入力の誤りなので、
+	 * 文面は締切のものに寄せず、形式が正しくないとだけ伝える。
+	 *
+	 * このクラスの中で起きたものだけを受け止める。
+	 * 他のコントローラの変換の失敗には関わらない。
+	 *
+	 * @return タスク一覧へ戻る
+	 */
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public String handleTypeMismatch() {
+		return "redirect:/tasks?error=dueFormat";
 	}
 }

@@ -13,8 +13,8 @@ package com.example.taskboard.controller;
 // 以下はこのアプリの部品。
 // User                    … 利用者1人
 // SettingsForm            … 設定画面から届く入れ物
-// PushSubscriptionService … 通知の届け先の出し入れ
 // UserService             … 利用者と設定
+// PushSubscriptionService … 通知の届け先の出し入れ
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
@@ -108,6 +108,16 @@ public class SettingsController {
 	 * pushEnabled は、届け先が1件でもあるかで決める。
 	 * 入切を別の列に持たず、届け先の有無そのものを状態として使っている。
 	 * 同じことを2か所に持つと、必ずどこかで食い違うため。
+	 *
+	 * この値は利用者ごとなので、2台で使うと、片方で登録しただけで
+	 * もう片方も入に見える。サーバーは端末を見分けられないため。
+	 *
+	 * そこで、画面を開いたあとに push.js がこの端末の届け先を送り、
+	 * /push/status で照合して、違っていたときだけスイッチを直す。
+	 * ここで入れているのは、その前に出しておく最初の状態になる。
+	 *
+	 * 最初から切にしておく手もあるが、そうすると
+	 * 1台で使っている人の画面で、開くたびに切→入と動いて見える。
 	 *
 	 * @param model 画面へ値を渡す入れ物
 	 * @return templates/settings.html

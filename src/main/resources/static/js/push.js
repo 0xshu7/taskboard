@@ -229,6 +229,67 @@ document.addEventListener("change", async function (event) {
 	}
 });
 
+// --- 画面を開いたときに、この端末の状態へ合わせる ---
+
+/**
+ * スイッチを、この端末が登録済みかどうかに合わせる。
+ *
+ * 画面を出す時点でサーバーが入れている印は、利用者ごとの状態。
+ * 届け先が1件でもあれば入になるので、2台目で開くと
+ * 登録していないのに入に見える。
+ *
+ * サーバーは、どの端末からの要求かを見分けられない。
+ * 届け先を知っているのはブラウザだけなので、
+ * それを送って照合してもらい、違っていたときだけ直す。
+ *
+ * 違っていたときだけ書き換えているのは、ちらつきを避けるため。
+ * 毎回いったん切にしてから入れ直すと、開くたびにスイッチが動いて見える。
+ */
+async function syncToggle() {
+
+	const toggle = document.getElementById("notify-enabled");
+
+	if (toggle === null || !("serviceWorker" in navigator)) {
+		return;
+	}
+
+	try {
+		const registration = await navigator.serviceWorker.getRegistration();
+
+		// サービスワーカーがまだ無い＝この端末では一度も入にしていない
+		if (!registration) {
+			setChecked(toggle, false);
+			return;
+		}
+
+		const subscription = await registration.pushManager.getSubscription();
+
+		if (subscription === null) {
+			setChecked(toggle, false);
+			return;
+		}
+
+		const response = await postJson("/push/status", { endpoint: subscription.endpoint });
+		const answer = await response.text();
+
+		setChecked(toggle, answer === "yes");
+
+	} catch (error) {
+		// 合わせられなかったときは、サーバーが入れた印のままにしておく。
+		// 勝手に切にすると、入っているのに切に見えることになる
+		console.error("通知の状態を確かめられませんでした", error);
+	}
+}
+
+/** 値が違うときだけ書き換える */
+function setChecked(toggle, value) {
+	if (toggle.checked !== value) {
+		toggle.checked = value;
+	}
+}
+
+syncToggle();
+
 // --- 通知を試すボタン ---
 document.addEventListener("click", async function (event) {
 
