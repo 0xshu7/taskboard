@@ -219,7 +219,7 @@ public class ProposalService {
 		// ここで3〜5秒待つ。接続は握っていない
 		Generated generated = callGenerator(prompt, situation, pickedTask);
 
-		numberCards(generated.cards(), pickedTask, generated.source());
+		numberCards(generated.cards(), pickedTask, generated.source(), situation);
 
 		return proposalStore.save(
 				newSet(user, situation, prompt, generated.source()),
@@ -300,7 +300,8 @@ public class ProposalService {
 	 * @param pickedTask 3件目に使うタスク。無ければ null
 	 * @param source     どこから来た3案か
 	 */
-	private void numberCards(List<ProposalCard> cards, Task pickedTask, String source) {
+	private void numberCards(List<ProposalCard> cards, Task pickedTask, String source,
+			Situation situation) {
 
 		int position = FIRST_POSITION;
 
@@ -309,10 +310,12 @@ public class ProposalService {
 
 			// 1枚目はすぐ終わる軽いもの、2枚目は今日中に終わるもの
 			if (position == FIRST_POSITION) {
+				card.setCategory(situation.getFirstCategory());
 				card.setGranularity(Granularity.FIVE_MIN);
 				card.setDifficulty(Difficulty.LOW);
 
 			} else if (position == SECOND_POSITION) {
+				card.setCategory(situation.getSecondCategory());
 				card.setGranularity(Granularity.TODAY);
 				card.setDifficulty(Difficulty.MID);
 			}
@@ -525,8 +528,9 @@ public class ProposalService {
 	/**
 	 * 迷い時間をログに出す。3案が出てから決めるまでの秒数。
 	 *
-	 * 何秒からを迷いと見なすかは決めず、秒数のまま AI に渡して解釈を任せている。
-	 * 同じ判断を2か所に持つと、必ずどこかで食い違うため。
+	 * 何秒からを迷いと見なすかは決めていない。秒数のまま残すだけで、
+	 * いまはプロンプトにも画面にも使っていない。
+	 * 提案の材料に入れるかどうかは、記録が溜まってから決める。
 	 *
 	 * @param set 決定済みのセット
 	 */

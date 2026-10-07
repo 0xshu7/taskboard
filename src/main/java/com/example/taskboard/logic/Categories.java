@@ -22,8 +22,10 @@ import java.util.List;
  * 文字列のままにしておけば、ここを直すだけで済む。
  *
  * 打ち間違いへの備えは別に用意してある。
- * 想定外の分野が来たときは FallbackCards.normalize がリラックスに寄せ、
- * ログに残すので、記録に4つ目の分野が混ざることはない。
+ * 想定外の分野が入らないようにしているのは2段。
+ * AI には responseSchema の enum でこの一覧しか返させず、
+ * 1件目と2件目は ProposalService.numberCards がアプリの決めた分野を入れ直す。
+ * 固定3案の側は FallbackCards.normalize がリラックスに寄せ、ログに残す。
  *
  * 【定数にした理由】
  *

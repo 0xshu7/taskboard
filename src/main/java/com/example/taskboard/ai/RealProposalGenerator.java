@@ -50,6 +50,7 @@ import org.springframework.web.client.RestClientResponseException;
 import com.example.taskboard.domain.Difficulty;
 import com.example.taskboard.domain.Granularity;
 import com.example.taskboard.domain.ProposalCard;
+import com.example.taskboard.logic.Categories;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -412,7 +413,10 @@ public class RealProposalGenerator implements ProposalGenerator {
 						"title",            Map.of("type", "STRING",
 						                           "description",
 						                           "「〇〇として、△△する」の一文。〇〇は指定された時間帯の言葉、△△は実際にやること。30字以内。中黒（・）や記号でつながない。ただし「3つ目に使うタスク」をそのまま使う案は、その title を一字も変えずに入れる"),
-						"category",         Map.of("type", "STRING"),
+						// 分野も、粒度・難易度と同じように値の一覧で縛る。
+						// 文章で頼むだけだと、決めた3つ以外が返ってくる余地が残る
+						"category",         Map.of("type", "STRING",
+						                           "enum", Categories.ALL),
 						"granularity",      Map.of("type", "STRING",
 						                           "enum", List.of("FIVE_MIN", "TODAY", "GROUP")),
 						"difficulty",       Map.of("type", "STRING",
